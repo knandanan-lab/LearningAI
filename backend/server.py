@@ -60,8 +60,11 @@ def public_user(u: dict) -> dict:
 
 
 def client_ip(request: Request) -> str:
-    fwd = request.headers.get("x-forwarded-for", "")
-    return fwd.split(",")[0].strip() or (request.client.host if request.client else "unknown")
+    fwd = [p.strip() for p in request.headers.get("x-forwarded-for", "").split(",") if p.strip()]
+    hops = int(os.environ["TRUSTED_PROXY_HOPS"])
+    if len(fwd) > hops:
+        return fwd[-hops - 1]
+    return request.client.host if request.client else "unknown"
 
 
 async def check_signup_limits(ip: str):
@@ -255,7 +258,7 @@ async def resend_verification(background: BackgroundTasks, user: dict = Depends(
     if user.get("email_verified"):
         return {"message": "Your email address is already confirmed."}
     hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
-    if await db.email_verify_tokens.count_documents({"user_id": str(user["_id"]), "created_at": {"$gt": hour_ago}}) >= 3:
+    if await db.email_verify_tokens.count_documents({"user_id": str(user["_id"]), "created_at": {"$gt": hour_ago}}) >= 4:
         raise HTTPException(429, "Please wait an hour before requesting another confirmation email.")
     background.add_task(send_verify, user["email"], await create_verify_link(str(user["_id"])))
     return {"message": "We have sent a new confirmation email. Please check your inbox and spam folder."}

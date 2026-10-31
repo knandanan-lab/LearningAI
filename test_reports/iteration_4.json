@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 4: tested sign-up limits, email verification (register->unverified, 403 on AI, resend limit, verify-email page ok/error), password reset -> verified, admin auto-verified, global AI cap (forced __all__=500 -> 429 + user count rolled back), plus regression of all earlier pytest suites and admin/profile/lesson UI. All requested features work. One security weakness: the per-IP signup limit can be bypassed by sending your own X-Forwarded-For header. One minor difference from the spec: only 2 resends are allowed, not 3.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/auth/register (client_ip)", "issue": "client_ip() trusts the FIRST X-Forwarded-For entry, which the client controls. Ingress appends the real IP, so a request with 'X-Forwarded-For: 203.0.113.77' was logged as that IP and got 200 after the real IP had already used its 5 sign-ups. Anyone can bypass the per-IP limit by changing the header. Only the global limit of 60/hour still applies. Fix: use the rightmost entry (or the entry at len-N for N trusted proxies) instead of [0]."},
+      {"endpoint": "POST /api/auth/resend-verification", "issue": "The 3/hour count includes the token created by the welcome email at registration. A new user gets only 2 successful resends; the 3rd resend (4th link overall) returns 429. If the goal was 3 resends, count only resend tokens (e.g. add a 'source' field) or raise the limit to 4."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter4_signup_limits_email_verify.py",
+    "/app/backend/tests/helpers_iter4_seed.py",
+    "/app/test_reports/pytest/pytest_iter4.xml"
+  ],
+  "action_items": [
+    "Change client_ip() so a client-supplied X-Forwarded-For cannot be used: take the rightmost (proxy-appended) IP instead of the first",
+    "Decide whether the resend limit should allow 3 resends on top of the welcome email; adjust the count if so"
+  ],
+  "critical_code_review_comments": [
+    "client_ip uses fwd.split(',')[0]: anyone can spoof it (confirmed by test_xff_spoof).",
+    "google_login: if someone registered with email and is unverified, then later signs in with Google using the same email, email_verified is not set to true even though Google has proved they own the address. Also a pre-hijack risk: an attacker can pre-register a victim's email with a password; the victim's Google login then joins that same account, and the attacker still knows the password. Consider setting email_verified=True and clearing or forcing a reset of the password_hash on Google login when the account is unverified.",
+    "check_ai_quota: when the global cap is hit, the '__all__' counter keeps going up past 500 on each rejected call (harmless, but stats will be inflated). The user's counter is rolled back correctly.",
+    "verify_email deletes all of the user's verify tokens, which also resets the resend counter. Acceptable.",
+    "Real email sending still fails with 502 'Failed to send email' in backend logs (expected; Universal Key credit). The errors are caught and logged in the background tasks, and registration still returns 200."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter4_signup_limits_email_verify.py (new)",
+    "/app/backend/tests/helpers_iter4_seed.py (new)",
+    "/app/backend/tests/test_ai15_api.py (learner fixture now sets email_verified=True via Mongo; AI stream test accepts the graceful error event)"
+  ],
+  "success_rate": {"backend": "95% (11/12 iter4 tests pass; only failure is the XFF spoof security test; all 57 regression tests pass)", "frontend": "100%"},
+  "seed_data_creation": "Temporary test_* learners were created and then deleted, along with their tokens, progress and ai_usage. All test_* users were cleaned up (21 removed, including leftovers from earlier iterations). signup_log and login_attempts were cleared. The ai_usage '__all__' doc for today was restored (count 2). Admin password was not changed; admin login gives 200.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run pytest with -n 0 (serial). Under xdist, the fixtures that clear signup_log run in parallel and break the signup limit tests. Clear db.signup_log before and after each suite, because 5 sign-ups per IP per hour is quickly reached across suites. Learners registered by email are unverified, so set email_verified=True in Mongo to test AI. The in-app AI (gemini) currently streams successfully. Email sending fails as expected.",
+  "rca of the issue": "XFF bypass: Kubernetes ingress appends the real client IP to any X-Forwarded-For the client sends. server.py client_ip() reads index 0, which is the attacker's value. Reproduce: clear signup_log, register 5 times, then register with header X-Forwarded-For: 1.2.3.4 -> 200 (expected 429). Mitigation: use the last entry of X-Forwarded-For (the one the trusted proxy appended)."
+}
