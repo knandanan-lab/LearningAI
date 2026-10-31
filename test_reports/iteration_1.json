@@ -1,0 +1,44 @@
+{
+  "summary": "First full e2e test of AI in 15. Backend: 27 pytest tests, 26 pass. Only brute-force lockout fails (ineffective behind ingress). Frontend: all 14 requested flows verified via Playwright (register w/ East Africa optgroup, login/logout + wrong password error, dashboard cards/continue/progress, lesson A-F + safety notice + time labels, copy toast, edit/reset, quiz feedback, reflection, mark complete -> 1 of 14 / 7% / Day 2, persistence after re-login, reopen + re-save, tasks filter, prompt search/category/favourites persisted, profile update -> greeting, admin stats + edit title & MCQ -> visible to learner (restored afterwards), learner /admin redirect, API 401/403, AI Try it (GPT 6 Luna) and Feedback (Claude Sonnet 5.5) streaming, Google redirect, mobile 390px).",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/auth/login", "issue": "Brute-force lockout is ineffective. Identifier uses request.client.host, which is the rotating ingress pod IP (observed 10.211.2.82 and 10.211.2.85 for the same client), so failures spread across several keys and 6+ wrong attempts never return 429. Use the first IP from the X-Forwarded-For header (or lock on email alone).", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/auth/login", "issue": "After the 15-min lock expires the count is not reset, so the next single failure locks the account again for 15 min. Reset count when locked_until < now."},
+      {"endpoint": "POST /api/ai/run", "issue": "Daily quota is incremented before the LLM call, so failed/errored streams still consume the user's 30/day allowance."},
+      {"endpoint": "PUT /api/admin/lessons/{id}", "issue": "Changing 'order' does not re-sequence other lessons; duplicate order values are allowed, which makes pathway order / 'Day N' labels ambiguous."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AIPanel output", "issue": "AI responses are shown as raw markdown (e.g. '**What works well**' with literal asterisks). Render markdown (e.g. react-markdown) or ask the model for plain text.", "selector": "[data-testid^='ai-output-']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "useLearning load", "issue": "No error handling or loading state: if /lessons, /progress or /favourites fails, the page stays blank (the component returns null) and shows no message.", "affected_selectors": ["Dashboard", "Lesson", "Prompts", "Tasks", "Pathway"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_ai15_api.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Fix login lockout identifier to use the X-Forwarded-For client IP (or email only) so 5 failures -> 429",
+    "Reset the login attempt count once the lock has expired",
+    "Render AI output markdown in AIPanel",
+    "Add error/loading states to the useLearning hook consumers",
+    "Optionally: do not count failed AI calls against the quota; validate/re-sequence lesson order on admin save"
+  ],
+  "critical_code_review_comments": [
+    "Auth uses a Bearer token in localStorage, not httpOnly cookies (a deliberate design choice). CORS '*' with allow_credentials is acceptable only because cookies are not used.",
+    "bcrypt hashes use the $2b$ format; seed_admin only creates the admin if missing and never overwrites the password (it only re-sets role=admin). Good.",
+    "@app.on_event is deprecated; consider a lifespan handler.",
+    "Google login silently links to an existing email/password account with the same email (acceptable, but note it)."
+  ],
+  "updated_files": ["/app/backend/tests/test_ai15_api.py"],
+  "success_rate": {"backend": "96% (26/27)", "frontend": "100% of requested flows functional"},
+  "test_credentials": "Admin from /app/memory/test_credentials.md works. Learner created: ui_bc975b@example.com / Learner123! (first name now Njeri, lesson-01 complete, lesson-02 favourited)",
+  "seed_data_creation": "Test learners test_*@example.com and ui_*@example.com. Lesson-01 and lesson-14 were edited and restored to their original values (lesson-01 title 'Meet your AI assistant', correct_index 1).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run pytest backend/tests/test_ai15_api.py with REACT_APP_BACKEND_URL exported. test_brute_force_lockout is expected to fail until the X-Forwarded-For fix. The AI test makes one Gemini call. In headless mode the copy toast appears through the execCommand fallback.",
+  "rca of the issue": "Lockout: identifier=f'{request.client.host}:{email}'. Behind the k8s ingress, client.host is the proxy pod IP, which alternates between replicas. Confirmed in the login_attempts collection: the same email had count 4 under 10.211.2.82 and count 2 under 10.211.2.85, so neither reached 5. Fix: ip = request.headers.get('x-forwarded-for','').split(',')[0].strip() or request.client.host."
+}

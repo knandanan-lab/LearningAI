@@ -138,10 +138,16 @@ async def register(body: RegisterIn):
 @api.post("/auth/login")
 async def login(body: LoginIn, request: Request):
     email = body.email.lower()
-    ident = f"{request.client.host if request.client else ''}:{email}"
+    ident = email
     attempt = await db.login_attempts.find_one({"identifier": ident})
     now = datetime.now(timezone.utc)
-    if attempt and attempt.get("count", 0) >= 5 and attempt.get("locked_until", now) > now:
+    locked_until = attempt.get("locked_until") if attempt else None
+    if locked_until and locked_until.tzinfo is None:
+        locked_until = locked_until.replace(tzinfo=timezone.utc)
+    if attempt and locked_until and locked_until <= now:
+        await db.login_attempts.delete_many({"identifier": ident})
+        attempt = None
+    if attempt and attempt.get("count", 0) >= 5:
         raise HTTPException(429, "Too many attempts. Please try again in 15 minutes.")
     user = await db.users.find_one({"email": email})
     if not user or not user.get("password_hash") or not verify_password(body.password, user["password_hash"]):
@@ -285,12 +291,13 @@ MODELS = {
 }
 TRY_SYSTEM = ("You are a helpful workplace assistant for working professionals in Africa. Use clear British "
               "English. Be concise and practical. If the prompt contains placeholders in square brackets, make "
-              "sensible fictional assumptions and say so in one line. Remind the user to check facts where relevant.")
+              "sensible fictional assumptions and say so in one line. Remind the user to check facts where relevant. "
+              "Write in plain text without markdown symbols such as asterisks or hashes.")
 FEEDBACK_SYSTEM = ("You are a friendly coach helping beginners write better prompts for AI tools at work. Use "
                    "clear British English. Do NOT carry out the task in the prompt. Reply in under 200 words with "
                    "these headings: What works well; What to improve (task, context, output, constraints); "
                    "Confidentiality check (flag any names, personal data or sensitive business details); "
-                   "Improved prompt.")
+                   "Improved prompt. Write in plain text without markdown symbols such as asterisks or hashes.")
 
 
 class AIIn(BaseModel):
@@ -324,8 +331,10 @@ async def ai_run(body: AIIn, user: dict = Depends(current_user)):
                     yield f"data: {json.dumps({'t': ev.content})}\n\n"
                 elif isinstance(ev, StreamDone):
                     break
-        except Exception as e:
+        except Exception:
             logging.exception("AI error")
+            await db.ai_usage.update_one({"user_id": str(user["_id"]), "date": datetime.now(timezone.utc).date().isoformat()},
+                                         {"$inc": {"count": -1}})
             yield f"data: {json.dumps({'error': 'The AI service is unavailable. Please try again later.'})}\n\n"
         yield "data: [DONE]\n\n"
 

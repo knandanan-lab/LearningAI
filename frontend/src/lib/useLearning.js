@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { toast } from "sonner";
+import { api, errorText } from "@/lib/api";
 
 export default function useLearning() {
   const [lessons, setLessons] = useState(null);
@@ -7,10 +8,14 @@ export default function useLearning() {
   const [favourites, setFavourites] = useState([]);
 
   const load = useCallback(async () => {
-    const [l, p, f] = await Promise.all([api.get("/lessons"), api.get("/progress"), api.get("/favourites")]);
-    setLessons(l.data);
-    setProgress(p.data);
-    setFavourites(f.data);
+    try {
+      const [l, p, f] = await Promise.all([api.get("/lessons"), api.get("/progress"), api.get("/favourites")]);
+      setLessons(l.data);
+      setProgress(p.data);
+      setFavourites(f.data);
+    } catch (e) {
+      toast.error(`Could not load your lessons. ${errorText(e)}`);
+    }
   }, []);
 
   useEffect(() => {
