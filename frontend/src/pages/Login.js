@@ -41,6 +41,7 @@ export default function Login() {
           <input id="password" type="password" required className="field" value={password} onChange={(e) => setPassword(e.target.value)} data-testid="login-password-input" />
         </div>
         {error && <p className="text-sm text-red-700" data-testid="login-error">{error}</p>}
+        <p className="text-sm text-right"><Link to="/forgot-password" className="text-[var(--green)] underline" data-testid="forgot-password-link">Forgotten your password?</Link></p>
         <button className="btn btn-primary w-full" disabled={busy} data-testid="login-submit-button">{busy ? "Logging in…" : "Log in"}</button>
       </form>
       <div className="my-5 text-center text-xs text-[var(--muted)]">or</div>

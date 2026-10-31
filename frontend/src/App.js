@@ -18,6 +18,9 @@ import Privacy from "@/pages/Privacy";
 import Guidance from "@/pages/Guidance";
 import Admin from "@/pages/Admin";
 import AdminLessonEdit from "@/pages/AdminLessonEdit";
+import AdminPassword from "@/pages/AdminPassword";
+import ForgotPassword from "@/pages/ForgotPassword";
+import ResetPassword from "@/pages/ResetPassword";
 
 function Loading() {
   return <div className="p-10 text-center text-[var(--muted)]" data-testid="page-loading">Loading…</div>;
@@ -50,6 +53,9 @@ function AppRouter() {
         <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
         <Route path="/register" element={<PublicOnly><Register /></PublicOnly>} />
         <Route path="/privacy" element={<Privacy />} />
+        <Route path="/forgot-password" element={<PublicOnly><ForgotPassword /></PublicOnly>} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/admin/password" element={P(<AdminPassword />, true)} />
         <Route path="/responsible-ai" element={<Guidance />} />
         <Route path="/complete-profile" element={P(<CompleteProfile />)} />
         <Route path="/dashboard" element={P(<Dashboard />)} />

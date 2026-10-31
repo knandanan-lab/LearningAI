@@ -7,7 +7,12 @@ load_dotenv(ROOT_DIR / '.env')
 import os
 import json
 import uuid
+import asyncio
+import hashlib
+import secrets
+import smtplib
 import logging
+from email.message import EmailMessage
 import httpx
 from fastapi.responses import StreamingResponse
 from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
@@ -165,6 +170,76 @@ async def me(user: dict = Depends(current_user)):
     return public_user(user)
 
 
+class ForgotIn(BaseModel):
+    email: EmailStr
+
+
+class ResetIn(BaseModel):
+    token: str
+    password: str = Field(min_length=8, max_length=128)
+
+
+class ChangePasswordIn(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+def send_reset_email(to: str, link: str):
+    sender = os.environ["GMAIL_ADDRESS"]
+    msg = EmailMessage()
+    msg["Subject"] = "Reset your AI in 15 password"
+    msg["From"] = f"AI in 15 <{sender}>"
+    msg["To"] = to
+    msg.set_content(
+        "Hello,\n\nWe received a request to reset your AI in 15 password. Use the link below within one hour:\n\n"
+        f"{link}\n\nIf you did not ask for this, you can ignore this email. Your password will not change.\n\n"
+        "AI in 15 - A Future Options learning initiative")
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=20) as s:
+        s.login(sender, os.environ["GMAIL_APP_PASSWORD"])
+        s.send_message(msg)
+
+
+@api.post("/auth/forgot-password")
+async def forgot_password(body: ForgotIn):
+    email = body.email.lower()
+    user = await db.users.find_one({"email": email})
+    if user:
+        token = secrets.token_urlsafe(32)
+        await db.password_reset_tokens.insert_one({
+            "token_hash": hashlib.sha256(token.encode()).hexdigest(), "user_id": str(user["_id"]),
+            "expires_at": datetime.now(timezone.utc) + timedelta(hours=1), "used": False})
+        link = f"{os.environ['FRONTEND_URL'].rstrip('/')}/reset-password?token={token}"
+        try:
+            await asyncio.to_thread(send_reset_email, email, link)
+        except Exception:
+            logging.exception("Password reset email failed")
+    return {"message": "If an account exists for this email, a reset link has been sent."}
+
+
+@api.post("/auth/reset-password")
+async def reset_password(body: ResetIn):
+    doc = await db.password_reset_tokens.find_one(
+        {"token_hash": hashlib.sha256(body.token.encode()).hexdigest(), "used": False})
+    expires = doc and doc["expires_at"]
+    if expires and expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    if not doc or expires < datetime.now(timezone.utc):
+        raise HTTPException(400, "This reset link is invalid or has expired. Please request a new one.")
+    user = await db.users.find_one({"_id": ObjectId(doc["user_id"])})
+    await db.users.update_one({"_id": user["_id"]}, {"$set": {"password_hash": hash_password(body.password)}})
+    await db.password_reset_tokens.update_many({"user_id": doc["user_id"]}, {"$set": {"used": True}})
+    await db.login_attempts.delete_many({"identifier": user["email"]})
+    return {"message": "Your password has been reset. You can now log in."}
+
+
+@api.post("/auth/change-password")
+async def change_password(body: ChangePasswordIn, user: dict = Depends(current_user)):
+    if not user.get("password_hash") or not verify_password(body.current_password, user["password_hash"]):
+        raise HTTPException(400, "Your current password is incorrect")
+    await db.users.update_one({"_id": user["_id"]}, {"$set": {"password_hash": hash_password(body.new_password)}})
+    return {"message": "Password changed"}
+
+
 @api.put("/profile")
 async def update_profile(body: ProfileIn, user: dict = Depends(current_user)):
     await db.users.update_one({"_id": user["_id"]}, {"$set": body.model_dump()})
@@ -241,9 +316,14 @@ async def admin_update_lesson(lesson_id: str, body: LessonIn, _: dict = Depends(
         raise HTTPException(400, "Unknown category")
     if not 0 <= body.question.correct_index < len(body.question.options):
         raise HTTPException(400, "Correct answer must match one of the options")
-    res = await db.lessons.update_one({"id": lesson_id}, {"$set": body.model_dump()})
+    res = await db.lessons.update_one({"id": lesson_id}, {"$set": body.model_dump(exclude={"order"})})
     if res.matched_count == 0:
         raise HTTPException(404, "Lesson not found")
+    others = await db.lessons.find({"id": {"$ne": lesson_id}}, {"_id": 0, "id": 1}).sort("order", 1).to_list(100)
+    ids = [o["id"] for o in others]
+    ids.insert(min(max(body.order, 1), len(ids) + 1) - 1, lesson_id)
+    for i, lid in enumerate(ids):
+        await db.lessons.update_one({"id": lid}, {"$set": {"order": i + 1}})
     return await db.lessons.find_one({"id": lesson_id}, {"_id": 0})
 
 
@@ -253,9 +333,16 @@ async def admin_stats(_: dict = Depends(admin_user)):
     completions = await db.progress.count_documents({})
     agg = await db.progress.aggregate([{"$group": {"_id": "$lesson_id", "count": {"$sum": 1}}}]).to_list(100)
     counts = {a["_id"]: a["count"] for a in agg}
+    ragg = await db.progress.aggregate([
+        {"$match": {"reflection": {"$in": ["Yes", "Maybe", "Not yet"]}}},
+        {"$group": {"_id": {"l": "$lesson_id", "r": "$reflection"}, "count": {"$sum": 1}}}]).to_list(500)
+    refl = {}
+    for a in ragg:
+        refl.setdefault(a["_id"]["l"], {"Yes": 0, "Maybe": 0, "Not yet": 0})[a["_id"]["r"]] = a["count"]
     lessons = await db.lessons.find({}, {"_id": 0, "id": 1, "title": 1, "order": 1}).sort("order", 1).to_list(100)
     return {"registered_users": users, "lessons_completed": completions,
-            "by_lesson": [{**lsn, "completions": counts.get(lsn["id"], 0)} for lsn in lessons]}
+            "by_lesson": [{**lsn, "completions": counts.get(lsn["id"], 0),
+                           "reflections": refl.get(lsn["id"], {"Yes": 0, "Maybe": 0, "Not yet": 0})} for lsn in lessons]}
 
 
 # ---------- Google sign-in (Emergent managed) ----------
@@ -361,6 +448,8 @@ async def startup():
     await db.progress.create_index([("user_id", 1), ("lesson_id", 1)], unique=True)
     await db.favourites.create_index([("user_id", 1), ("lesson_id", 1)], unique=True)
     await db.login_attempts.create_index("identifier")
+    await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
+    await db.password_reset_tokens.create_index("token_hash")
     if await db.lessons.count_documents({}) == 0:
         await db.lessons.insert_many(build_lessons())
     admin_email = os.environ["ADMIN_EMAIL"].lower()

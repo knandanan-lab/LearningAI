@@ -50,8 +50,8 @@ export default function AdminLessonEdit() {
           </select>
         </div>
         <div>
-          <label className="label">Pathway order (1 = first)</label>
-          <input type="number" min={1} className="field" value={f.order} onChange={(e) => set("order", e.target.value)} data-testid="admin-order-input" />
+          <label className="label">Pathway position (1 = first; other lessons renumber automatically)</label>
+          <input type="number" min={1} max={14} className="field" value={f.order} onChange={(e) => set("order", e.target.value)} data-testid="admin-order-input" />
         </div>
       </div>
       {TEXT_FIELDS.map(([k, label, rows]) => (
