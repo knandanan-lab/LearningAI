@@ -4,6 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { CATEGORIES } from "@/lib/constants";
 import useLearning from "@/lib/useLearning";
 import ProgressBar from "@/components/ProgressBar";
+import VerifyNotice from "@/components/VerifyNotice";
 
 const LINKS = [
   ["/pathway", "My learning pathway", "Route"],
@@ -24,6 +25,7 @@ export default function Dashboard() {
       <section>
         <h1 className="text-3xl sm:text-4xl font-bold" data-testid="dashboard-greeting">Hello, {user.first_name}</h1>
         <p className="mt-2 text-base md:text-lg text-[var(--muted)]">What would you like to accomplish today?</p>
+        {!user.email_verified && <div className="mt-6 max-w-2xl"><VerifyNotice /></div>}
       </section>
 
       <section className="grid grid-cols-2 lg:grid-cols-3 gap-3" data-testid="task-categories">

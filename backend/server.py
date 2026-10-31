@@ -25,7 +25,7 @@ from pydantic import BaseModel, EmailStr, Field
 from starlette.middleware.cors import CORSMiddleware
 
 from lessons_seed import CATEGORIES, build_lessons
-from emailer import send_email, reset_email_html, welcome_email_html
+from emailer import send_email, reset_email_html, welcome_email_html, verify_email_html
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
 db = client[os.environ['DB_NAME']]
@@ -55,7 +55,30 @@ def public_user(u: dict) -> dict:
         "country": u.get("country", ""), "work_function": u.get("work_function", ""),
         "ai_experience": u.get("ai_experience", ""), "role": u.get("role", "learner"),
         "has_password": bool(u.get("password_hash")),
+        "email_verified": bool(u.get("email_verified")),
     }
+
+
+def client_ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for", "")
+    return fwd.split(",")[0].strip() or (request.client.host if request.client else "unknown")
+
+
+async def check_signup_limits(ip: str):
+    hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+    if await db.signup_log.count_documents({"ip": ip, "created_at": {"$gt": hour_ago}}) >= int(os.environ["SIGNUP_PER_IP_HOURLY"]):
+        raise HTTPException(429, "Too many new accounts from your network. Please try again later.")
+    if await db.signup_log.count_documents({"created_at": {"$gt": hour_ago}}) >= int(os.environ["SIGNUP_GLOBAL_HOURLY"]):
+        raise HTTPException(429, "Registration is busy right now. Please try again in an hour.")
+
+
+async def create_verify_link(user_id: str) -> str:
+    token = secrets.token_urlsafe(32)
+    now = datetime.now(timezone.utc)
+    await db.email_verify_tokens.insert_one({
+        "token_hash": hashlib.sha256(token.encode()).hexdigest(), "user_id": user_id,
+        "created_at": now, "expires_at": now + timedelta(hours=24)})
+    return f"{os.environ['FRONTEND_URL'].rstrip('/')}/verify-email?token={token}"
 
 
 async def current_user(request: Request) -> dict:
@@ -127,16 +150,19 @@ class LessonIn(BaseModel):
 
 # ---------- Auth ----------
 @api.post("/auth/register")
-async def register(body: RegisterIn, background: BackgroundTasks):
+async def register(body: RegisterIn, request: Request, background: BackgroundTasks):
     email = body.email.lower()
+    ip = client_ip(request)
+    await check_signup_limits(ip)
     if await db.users.find_one({"email": email}):
         raise HTTPException(400, "An account with this email already exists")
     doc = body.model_dump(exclude={"password", "email"})
     doc.update(email=email, password_hash=hash_password(body.password), role="learner",
-               created_at=datetime.now(timezone.utc).isoformat())
+               email_verified=False, created_at=datetime.now(timezone.utc).isoformat())
     res = await db.users.insert_one(doc)
     doc["_id"] = res.inserted_id
-    background.add_task(send_welcome, email, doc["first_name"])
+    await db.signup_log.insert_one({"ip": ip, "created_at": datetime.now(timezone.utc)})
+    background.add_task(send_welcome, email, doc["first_name"], await create_verify_link(str(res.inserted_id)))
     return {"token": make_token(str(res.inserted_id)), "user": public_user(doc)}
 
 
@@ -191,13 +217,48 @@ async def send_reset(email: str, link: str):
         logging.exception("Password reset email failed")
 
 
-async def send_welcome(email: str, first_name: str):
+async def send_welcome(email: str, first_name: str, verify_link: Optional[str] = None):
     try:
         first = await db.lessons.find_one({}, {"_id": 0, "id": 1}, sort=[("order", 1)])
         link = f"{os.environ['FRONTEND_URL'].rstrip('/')}/lessons/{first['id']}"
-        await send_email(to=email, subject="Welcome to AI in 15", html=welcome_email_html(first_name, link))
+        await send_email(to=email, subject="Welcome to AI in 15", html=welcome_email_html(first_name, link, verify_link))
     except Exception:
         logging.exception("Welcome email failed")
+
+
+async def send_verify(email: str, link: str):
+    try:
+        await send_email(to=email, subject="Confirm your AI in 15 email address", html=verify_email_html(link))
+    except Exception:
+        logging.exception("Verification email failed")
+
+
+class VerifyIn(BaseModel):
+    token: str
+
+
+@api.post("/auth/verify-email")
+async def verify_email(body: VerifyIn):
+    doc = await db.email_verify_tokens.find_one({"token_hash": hashlib.sha256(body.token.encode()).hexdigest()})
+    expires = doc and doc["expires_at"]
+    if expires and expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    if not doc or expires < datetime.now(timezone.utc):
+        raise HTTPException(400, "This confirmation link is invalid or has expired. Please request a new one.")
+    await db.users.update_one({"_id": ObjectId(doc["user_id"])}, {"$set": {"email_verified": True}})
+    await db.email_verify_tokens.delete_many({"user_id": doc["user_id"]})
+    return {"message": "Thank you. Your email address is confirmed."}
+
+
+@api.post("/auth/resend-verification")
+async def resend_verification(background: BackgroundTasks, user: dict = Depends(current_user)):
+    if user.get("email_verified"):
+        return {"message": "Your email address is already confirmed."}
+    hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+    if await db.email_verify_tokens.count_documents({"user_id": str(user["_id"]), "created_at": {"$gt": hour_ago}}) >= 3:
+        raise HTTPException(429, "Please wait an hour before requesting another confirmation email.")
+    background.add_task(send_verify, user["email"], await create_verify_link(str(user["_id"])))
+    return {"message": "We have sent a new confirmation email. Please check your inbox and spam folder."}
 
 
 async def create_reset_link(user: dict) -> str:
@@ -240,7 +301,8 @@ async def reset_password(body: ResetIn):
     user = await db.users.find_one({"_id": ObjectId(doc["user_id"])})
     if not user:
         raise HTTPException(400, "This reset link is invalid or has expired. Please request a new one.")
-    await db.users.update_one({"_id": user["_id"]}, {"$set": {"password_hash": hash_password(body.password)},
+    await db.users.update_one({"_id": user["_id"]}, {"$set": {"password_hash": hash_password(body.password),
+                                                              "email_verified": True},
                                                      "$inc": {"token_version": 1}})
     await db.password_reset_tokens.update_many({"user_id": doc["user_id"]}, {"$set": {"used": True}})
     await db.login_attempts.delete_many({"identifier": user["email"]})
@@ -382,7 +444,7 @@ async def google_login(body: GoogleIn, background: BackgroundTasks):
     if not user:
         doc = {"email": email, "password_hash": "", "first_name": (data.get("name") or "").split(" ")[0][:60],
                "country": "", "work_function": "", "ai_experience": "", "role": "learner",
-               "auth_provider": "google", "created_at": datetime.now(timezone.utc).isoformat()}
+               "auth_provider": "google", "email_verified": True, "created_at": datetime.now(timezone.utc).isoformat()}
         res = await db.users.insert_one(doc)
         doc["_id"] = res.inserted_id
         user = doc
@@ -420,10 +482,17 @@ async def check_ai_quota(user_id: str):
         {"user_id": user_id, "date": today}, {"$inc": {"count": 1}}, upsert=True, return_document=True)
     if doc["count"] > limit:
         raise HTTPException(429, f"You have reached today's limit of {limit} AI requests. Please try again tomorrow.")
+    total = await db.ai_usage.find_one_and_update(
+        {"user_id": "__all__", "date": today}, {"$inc": {"count": 1}}, upsert=True, return_document=True)
+    if total["count"] > int(os.environ["AI_GLOBAL_DAILY_LIMIT"]):
+        await db.ai_usage.update_one({"user_id": user_id, "date": today}, {"$inc": {"count": -1}})
+        raise HTTPException(429, "The in-app AI has reached today's limit for all learners. Please try again tomorrow, or use your own AI tool.")
 
 
 @api.post("/ai/run")
 async def ai_run(body: AIIn, user: dict = Depends(current_user)):
+    if not user.get("email_verified"):
+        raise HTTPException(403, "Please confirm your email address to use the in-app AI.")
     await check_ai_quota(str(user["_id"]))
     provider, model = MODELS[body.model]
     system = TRY_SYSTEM if body.mode == "try" else FEEDBACK_SYSTEM
@@ -440,8 +509,9 @@ async def ai_run(body: AIIn, user: dict = Depends(current_user)):
                     break
         except Exception:
             logging.exception("AI error")
-            await db.ai_usage.update_one({"user_id": str(user["_id"]), "date": datetime.now(timezone.utc).date().isoformat()},
-                                         {"$inc": {"count": -1}})
+            today = datetime.now(timezone.utc).date().isoformat()
+            await db.ai_usage.update_many({"user_id": {"$in": [str(user["_id"]), "__all__"]}, "date": today},
+                                          {"$inc": {"count": -1}})
             yield f"data: {json.dumps({'error': 'The AI service is unavailable. Please try again later.'})}\n\n"
         yield "data: [DONE]\n\n"
 
@@ -470,6 +540,10 @@ async def startup():
     await db.login_attempts.create_index("identifier")
     await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
     await db.password_reset_tokens.create_index("token_hash")
+    await db.email_verify_tokens.create_index("expires_at", expireAfterSeconds=0)
+    await db.email_verify_tokens.create_index("token_hash")
+    await db.signup_log.create_index("created_at", expireAfterSeconds=7200)
+    await db.signup_log.create_index("ip")
     if await db.lessons.count_documents({}) == 0:
         await db.lessons.insert_many(build_lessons())
     admin_email = os.environ["ADMIN_EMAIL"].lower()
@@ -477,10 +551,10 @@ async def startup():
         await db.users.insert_one({
             "email": admin_email, "password_hash": hash_password(os.environ["ADMIN_PASSWORD"]),
             "first_name": "Administrator", "country": "Kenya", "work_function": "Other",
-            "ai_experience": "Confident user", "role": "admin",
+            "ai_experience": "Confident user", "role": "admin", "email_verified": True,
             "created_at": datetime.now(timezone.utc).isoformat()})
     else:
-        await db.users.update_one({"email": admin_email}, {"$set": {"role": "admin"}})
+        await db.users.update_one({"email": admin_email}, {"$set": {"role": "admin", "email_verified": True}})
 
 
 @app.on_event("shutdown")

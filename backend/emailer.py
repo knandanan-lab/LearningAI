@@ -109,10 +109,30 @@ async def send_email(*, to: str, subject: str, html: str) -> str | None:
         raise HTTPException(502, "Failed to send email")
 
 
-def welcome_email_html(first_name: str, link: str) -> str:
+def _button(link: str, label: str) -> str:
+    return (f'<p style="margin:24px 0"><a href="{escape(link, quote=True)}" style="background:#0f4c3a;color:#ffffff;'
+            f'padding:12px 22px;border-radius:999px;text-decoration:none;display:inline-block">{label}</a></p>')
+
+
+def verify_email_html(link: str) -> str:
+    brand = escape(os.environ["EMAIL_FROM_NAME"])
+    return (
+        '<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#14211c">'
+        f'<h2 style="color:#0f4c3a;margin:0 0 16px">Confirm your {brand} email address</h2>'
+        "<p>Please confirm your email address to use the in-app AI practice tools. This link expires in 24 hours.</p>"
+        + _button(link, "Confirm my email") +
+        "<p>If you did not create an account, you can ignore this email.</p>"
+        f'<p style="font-size:12px;color:#888">Sent by {brand} - A Future Options learning initiative. '
+        "We never ask for your password by email.</p></td></tr></table>"
+    )
+
+
+def welcome_email_html(first_name: str, link: str, verify_link: str | None = None) -> str:
     brand = escape(os.environ["EMAIL_FROM_NAME"])
     name = escape(first_name or "there")
     safe = escape(link, quote=True)
+    confirm = ("<p><strong>Please confirm your email address</strong> to use the in-app AI practice tools "
+               "(link valid for 24 hours):</p>" + _button(verify_link, "Confirm my email")) if verify_link else ""
     return (
         '<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#14211c">'
         f'<h2 style="color:#0f4c3a;margin:0 0 16px">Welcome to {brand}, {name}</h2>'
@@ -120,6 +140,7 @@ def welcome_email_html(first_name: str, link: str) -> str:
         "everyday work easier.</p>"
         "<p>Your first lesson, <strong>Day 1: Meet your AI assistant</strong>, helps you choose a suitable "
         "everyday task for AI. Learn at your own pace; you do not need to learn every day.</p>"
+        + confirm +
         f'<p style="margin:24px 0"><a href="{safe}" style="background:#0f4c3a;color:#ffffff;padding:12px 22px;'
         'border-radius:999px;text-decoration:none;display:inline-block">Start Day 1</a></p>'
         "<p>Remember: do not enter confidential business information, personal data or sensitive client "

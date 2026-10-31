@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Sparkles, MessageSquareText } from "lucide-react";
 import { streamAI } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
+import VerifyNotice from "@/components/VerifyNotice";
 
 const MODELS = [
   ["gpt", "GPT 6 Luna"],
@@ -9,6 +11,7 @@ const MODELS = [
 ];
 
 export default function AIPanel({ id, prompt }) {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [model, setModel] = useState("gpt");
   const [out, setOut] = useState("");
@@ -36,6 +39,8 @@ export default function AIPanel({ id, prompt }) {
         Optional: test this prompt inside the app
       </button>
     );
+
+  if (!user.email_verified) return <VerifyNotice compact />;
 
   return (
     <div className="rounded-xl border border-[var(--line)] bg-[var(--wash)] p-4 space-y-3" data-testid={`ai-panel-${id}`}>
