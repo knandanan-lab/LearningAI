@@ -5,7 +5,12 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 import os
+import json
+import uuid
 import logging
+import httpx
+from fastapi.responses import StreamingResponse
+from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Literal
 
@@ -139,7 +144,7 @@ async def login(body: LoginIn, request: Request):
     if attempt and attempt.get("count", 0) >= 5 and attempt.get("locked_until", now) > now:
         raise HTTPException(429, "Too many attempts. Please try again in 15 minutes.")
     user = await db.users.find_one({"email": email})
-    if not user or not verify_password(body.password, user["password_hash"]):
+    if not user or not user.get("password_hash") or not verify_password(body.password, user["password_hash"]):
         count = (attempt or {}).get("count", 0) + 1
         await db.login_attempts.update_one(
             {"identifier": ident},
@@ -245,6 +250,87 @@ async def admin_stats(_: dict = Depends(admin_user)):
     lessons = await db.lessons.find({}, {"_id": 0, "id": 1, "title": 1, "order": 1}).sort("order", 1).to_list(100)
     return {"registered_users": users, "lessons_completed": completions,
             "by_lesson": [{**lsn, "completions": counts.get(lsn["id"], 0)} for lsn in lessons]}
+
+
+# ---------- Google sign-in (Emergent managed) ----------
+class GoogleIn(BaseModel):
+    session_id: str
+
+
+@api.post("/auth/google")
+async def google_login(body: GoogleIn):
+    async with httpx.AsyncClient(timeout=15) as hc:
+        r = await hc.get("https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+                         headers={"X-Session-ID": body.session_id})
+    if r.status_code != 200:
+        raise HTTPException(401, "Google sign-in failed. Please try again.")
+    data = r.json()
+    email = data["email"].lower()
+    user = await db.users.find_one({"email": email})
+    if not user:
+        doc = {"email": email, "password_hash": "", "first_name": (data.get("name") or "").split(" ")[0][:60],
+               "country": "", "work_function": "", "ai_experience": "", "role": "learner",
+               "auth_provider": "google", "created_at": datetime.now(timezone.utc).isoformat()}
+        res = await db.users.insert_one(doc)
+        doc["_id"] = res.inserted_id
+        user = doc
+    return {"token": make_token(str(user["_id"])), "user": public_user(user)}
+
+
+# ---------- AI practice (Emergent LLM key) ----------
+MODELS = {
+    "claude": ("anthropic", "claude-sonnet-5-5"),
+    "gpt": ("openai", "gpt-6-luna"),
+    "gemini": ("gemini", "gemini-3-flash-preview"),
+}
+TRY_SYSTEM = ("You are a helpful workplace assistant for working professionals in Africa. Use clear British "
+              "English. Be concise and practical. If the prompt contains placeholders in square brackets, make "
+              "sensible fictional assumptions and say so in one line. Remind the user to check facts where relevant.")
+FEEDBACK_SYSTEM = ("You are a friendly coach helping beginners write better prompts for AI tools at work. Use "
+                   "clear British English. Do NOT carry out the task in the prompt. Reply in under 200 words with "
+                   "these headings: What works well; What to improve (task, context, output, constraints); "
+                   "Confidentiality check (flag any names, personal data or sensitive business details); "
+                   "Improved prompt.")
+
+
+class AIIn(BaseModel):
+    prompt: str = Field(min_length=5, max_length=4000)
+    model: Literal["claude", "gpt", "gemini"] = "gpt"
+    mode: Literal["try", "feedback"] = "try"
+
+
+async def check_ai_quota(user_id: str):
+    today = datetime.now(timezone.utc).date().isoformat()
+    limit = int(os.environ["AI_DAILY_LIMIT"])
+    doc = await db.ai_usage.find_one_and_update(
+        {"user_id": user_id, "date": today}, {"$inc": {"count": 1}}, upsert=True, return_document=True)
+    if doc["count"] > limit:
+        raise HTTPException(429, f"You have reached today's limit of {limit} AI requests. Please try again tomorrow.")
+
+
+@api.post("/ai/run")
+async def ai_run(body: AIIn, user: dict = Depends(current_user)):
+    await check_ai_quota(str(user["_id"]))
+    provider, model = MODELS[body.model]
+    system = TRY_SYSTEM if body.mode == "try" else FEEDBACK_SYSTEM
+    text = body.prompt if body.mode == "try" else f"Please give feedback on this prompt:\n\n{body.prompt}"
+    chat = LlmChat(api_key=os.environ["EMERGENT_LLM_KEY"], session_id=f"{user['_id']}-{uuid.uuid4().hex}",
+                   system_message=system).with_model(provider, model)
+
+    async def events():
+        try:
+            async for ev in chat.stream_message(UserMessage(text=text)):
+                if isinstance(ev, TextDelta):
+                    yield f"data: {json.dumps({'t': ev.content})}\n\n"
+                elif isinstance(ev, StreamDone):
+                    break
+        except Exception as e:
+            logging.exception("AI error")
+            yield f"data: {json.dumps({'error': 'The AI service is unavailable. Please try again later.'})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(events(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 app.include_router(api)

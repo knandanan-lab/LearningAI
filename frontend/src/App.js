@@ -1,57 +1,78 @@
-import { useEffect } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
-import { HOME } from "@/constants/testIds";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { Toaster } from "@/components/ui/sonner";
+import { AuthProvider, useAuth, profileComplete } from "@/context/AuthContext";
+import Layout from "@/components/Layout";
+import Welcome from "@/pages/Welcome";
+import Login from "@/pages/Login";
+import Register from "@/pages/Register";
+import AuthCallback from "@/pages/AuthCallback";
+import CompleteProfile from "@/pages/CompleteProfile";
+import Dashboard from "@/pages/Dashboard";
+import Pathway from "@/pages/Pathway";
+import Tasks from "@/pages/Tasks";
+import Lesson from "@/pages/Lesson";
+import Prompts from "@/pages/Prompts";
+import Profile from "@/pages/Profile";
+import Privacy from "@/pages/Privacy";
+import Guidance from "@/pages/Guidance";
+import Admin from "@/pages/Admin";
+import AdminLessonEdit from "@/pages/AdminLessonEdit";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+function Loading() {
+  return <div className="p-10 text-center text-[var(--muted)]" data-testid="page-loading">Loading…</div>;
+}
 
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
+function Protected({ children, admin = false }) {
+  const { user } = useAuth();
+  const location = useLocation();
+  if (user === null) return <Loading />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!profileComplete(user) && location.pathname !== "/complete-profile") return <Navigate to="/complete-profile" replace />;
+  if (admin && user.role !== "admin") return <Navigate to="/dashboard" replace />;
+  return children;
+}
 
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
+function PublicOnly({ children }) {
+  const { user } = useAuth();
+  if (user === null) return <Loading />;
+  return user ? <Navigate to="/dashboard" replace /> : children;
+}
 
+function AppRouter() {
+  const location = useLocation();
+  if (location.hash?.includes("session_id=")) return <AuthCallback />;
+  const P = (el, admin) => <Protected admin={admin}>{el}</Protected>;
   return (
-    // The marker attribute below lets the platform probe detect the stock splash — remove it with this page
-    <div data-emergent-splash>
-      <header className="App-header">
-        <a
-          data-testid={HOME.emergentLink}
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
-};
-
-function App() {
-  return (
-    <div className="App">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </div>
+    <Layout>
+      <Routes>
+        <Route path="/" element={<PublicOnly><Welcome /></PublicOnly>} />
+        <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
+        <Route path="/register" element={<PublicOnly><Register /></PublicOnly>} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/responsible-ai" element={<Guidance />} />
+        <Route path="/complete-profile" element={P(<CompleteProfile />)} />
+        <Route path="/dashboard" element={P(<Dashboard />)} />
+        <Route path="/pathway" element={P(<Pathway />)} />
+        <Route path="/tasks" element={P(<Tasks />)} />
+        <Route path="/lessons/:id" element={P(<Lesson />)} />
+        <Route path="/prompts" element={P(<Prompts />)} />
+        <Route path="/profile" element={P(<Profile />)} />
+        <Route path="/admin" element={P(<Admin />, true)} />
+        <Route path="/admin/lessons/:id" element={P(<AdminLessonEdit />, true)} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Layout>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <AppRouter />
+        <Toaster position="top-center" />
+      </AuthProvider>
+    </BrowserRouter>
+  );
+}
