@@ -18,6 +18,12 @@ Mobile-friendly MVP “AI in 15” for Future Options Consulting Ltd: helps work
 - All core journey features, 14 full lessons, admin editor + stats, Google sign-in, AI try/feedback
 - Tested: iteration_1 — all frontend flows pass; brute-force lockout fixed afterwards (now locks by email after 5 failures)
 
+## Iteration 2 (June 2026)
+- Password reset by email link (1-hour, single-use, max 3 per hour) via Emergent Managed Email (Resend), sender name "AI in 15", reply-to dan@futureoptions.org. Gmail SMTP was tried, but this hosting blocks SMTP logins.
+- Admin change-own-password screen (/admin/password); a reset or change signs out other sessions (token_version)
+- Lesson position renumbers the other lessons automatically; admin table shows Yes / Maybe / Not yet reflection counts
+- Sending email is BLOCKED until Universal Key credit is topped up (402 insufficient_credits)
+
 ## Backlog
-- P1: Admin order re-sequencing / duplicate order validation; in-app password change & reset for admin/learners
+- P1: Update FRONTEND_URL to the live domain when publishing (reset links use it)
 - P2: Admin view of reflection answers (aggregate); export of stats

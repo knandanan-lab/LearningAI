@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 2: tested forgot/reset password, forgot-password rate limit, admin change-own-password (restored to original), learner blocked from /admin/password, admin lesson reorder (lesson-05 -> 2 -> 5), admin Yes/Maybe/Not yet reflection column, and regression of login/dashboard/lesson completion. Backend 18/18 pytest pass. All UI flows work. One frontend race bug found in AdminLessonEdit (double fetch under React StrictMode overwrites quick edits). Admin password confirmed back to z-lQI9UdjCj48kvM; lesson order confirmed back to 1..14 (lesson-01..lesson-14).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/auth/reset-password, /api/auth/change-password", "issue": "Existing JWTs (7-day) are still valid after a password reset or change. Other sessions are not signed out, so a stolen session survives a reset. Suggestion: store a password_changed_at/token_version on the user and check it in current_user."},
+      {"endpoint": "POST /api/auth/reset-password", "issue": "If the user behind a valid token has been deleted, find_one returns None and user['_id'] raises a 500. Return 400 instead."},
+      {"endpoint": "POST /api/auth/forgot-password", "issue": "The email is sent inline, so known emails take noticeably longer to answer than unknown ones. This timing difference lets someone check which emails have accounts. Consider sending in a BackgroundTask. Email currently fails with 402 insufficient_credits (expected): the 503 HTTPException is caught and logged, and the generic 200 is still returned (verified in the backend.err.log)."},
+      {"endpoint": "config FRONTEND_URL", "issue": "backend/.env FRONTEND_URL (1269118e-...preview.emergentagent.com) differs from REACT_APP_BACKEND_URL (ai-in--6775ra7d...). It responds, but reset links in emails will point to that host. Confirm it is the intended public domain for production."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AdminLessonEdit.js", "issue": "Race condition: under React.StrictMode the useEffect fetches GET /lessons/:id twice (confirmed: 2 GETs per page load). The second response calls setF and overwrites any edits made before it arrives. In automation, filling order=2 right after the form appeared sent the stale order in the PUT, so the lesson did not move. With a 2s wait it works correctly. Real users editing very quickly, or on a slow network, could lose edits. Fix: use an ignore/abort flag in the effect cleanup, or only setF when f is null.", "selector": "[data-testid='admin-order-input']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iter2_password_reorder.py", "/app/backend/tests/test_ai15_api.py", "/app/test_reports/pytest/pytest_iter2.xml"],
+  "action_items": [
+    "Fix AdminLessonEdit fetch race (ignore stale/duplicate response in useEffect cleanup) so edits are not overwritten",
+    "Invalidate existing sessions after password reset/change (token_version)",
+    "Guard reset_password against a deleted user (return 400, not 500)",
+    "Optional: send the reset email in a background task to remove the timing difference that reveals which emails have accounts",
+    "Confirm FRONTEND_URL is the correct public domain for reset links"
+  ],
+  "critical_code_review_comments": [
+    "admin_update_lesson renumbers with N sequential update_one calls, not atomically. Two admins saving at once could leave duplicate orders. Acceptable for a single-admin MVP; bulk_write would be cleaner.",
+    "Rate limit counts tokens by created_at only, which is correct. Tokens are stored as SHA-256 hashes, and all of a user's tokens are invalidated on use. Good.",
+    "pytest.ini enables xdist (-n). The iteration-2 test file has order-dependent tests sharing a module fixture, so run it with -n 0."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter2_password_reorder.py (fixed login() kwarg bug; added rate-limit and admin change+restore tests)"],
+  "success_rate": {"backend": "100% (18/18)", "frontend": "95% (all flows pass; one race bug in the lesson edit form)"},
+  "test_credentials": "Admin knandanan@gmail.com / z-lQI9UdjCj48kvM (verified restored, login 200)",
+  "seed_data_creation": "Temporary learners test_it2_*@example.com and test_ui_reset@example.com were created and deleted. login_attempts were cleared.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && python -m pytest tests/test_iter2_password_reorder.py -n 0 -v. The rate-limit test pre-seeds 3 tokens, so no real email is sent. In Playwright, wait about 1.5s after the admin edit form appears before typing, until the StrictMode double-fetch race is fixed. Email sending returns 402 insufficient_credits (expected).",
+  "rca of the issue": "AdminLessonEdit: useEffect([id]) -> api.get().then(setF) has no cleanup. React 18 StrictMode mounts, unmounts and remounts in dev, so two requests run, and the later-resolving one replaces user edits. Reproduced: fill order=5 right after load -> the PUT body had order:2 (stale). Mitigation: let cancelled = false; return () => { cancelled = true } and skip setF when cancelled."
+}

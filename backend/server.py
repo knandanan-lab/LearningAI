@@ -19,7 +19,7 @@ from typing import List, Optional, Literal
 import bcrypt
 import jwt
 from bson import ObjectId
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, BackgroundTasks
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field
 from starlette.middleware.cors import CORSMiddleware
@@ -44,8 +44,8 @@ def verify_password(p: str, h: str) -> bool:
     return bcrypt.checkpw(p.encode(), h.encode())
 
 
-def make_token(user_id: str) -> str:
-    payload = {"sub": user_id, "type": "access", "exp": datetime.now(timezone.utc) + timedelta(days=7)}
+def make_token(user_id: str, tv: int = 0) -> str:
+    payload = {"sub": user_id, "type": "access", "tv": tv, "exp": datetime.now(timezone.utc) + timedelta(days=7)}
     return jwt.encode(payload, os.environ["JWT_SECRET"], algorithm=JWT_ALG)
 
 
@@ -66,8 +66,8 @@ async def current_user(request: Request) -> dict:
         user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
     except (jwt.InvalidTokenError, Exception):
         raise HTTPException(401, "Invalid or expired session")
-    if not user:
-        raise HTTPException(401, "User not found")
+    if not user or payload.get("tv", 0) != user.get("token_version", 0):
+        raise HTTPException(401, "Your session has ended. Please log in again.")
     return user
 
 
@@ -160,7 +160,7 @@ async def login(body: LoginIn, request: Request):
             {"$set": {"count": count, "locked_until": now + timedelta(minutes=15)}}, upsert=True)
         raise HTTPException(401, "Incorrect email or password")
     await db.login_attempts.delete_many({"identifier": ident})
-    return {"token": make_token(str(user["_id"])), "user": public_user(user)}
+    return {"token": make_token(str(user["_id"]), user.get("token_version", 0)), "user": public_user(user)}
 
 
 @api.get("/auth/me")
@@ -182,8 +182,15 @@ class ChangePasswordIn(BaseModel):
     new_password: str = Field(min_length=8, max_length=128)
 
 
+async def send_reset(email: str, link: str):
+    try:
+        await send_email(to=email, subject="Reset your AI in 15 password", html=reset_email_html(link))
+    except Exception:
+        logging.exception("Password reset email failed")
+
+
 @api.post("/auth/forgot-password")
-async def forgot_password(body: ForgotIn):
+async def forgot_password(body: ForgotIn, background: BackgroundTasks):
     email = body.email.lower()
     user = await db.users.find_one({"email": email})
     hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
@@ -195,10 +202,7 @@ async def forgot_password(body: ForgotIn):
             "token_hash": hashlib.sha256(token.encode()).hexdigest(), "user_id": str(user["_id"]),
             "created_at": now, "expires_at": now + timedelta(hours=1), "used": False})
         link = f"{os.environ['FRONTEND_URL'].rstrip('/')}/reset-password?token={token}"
-        try:
-            await send_email(to=email, subject="Reset your AI in 15 password", html=reset_email_html(link))
-        except Exception:
-            logging.exception("Password reset email failed")
+        background.add_task(send_reset, email, link)
     return {"message": "If an account exists for this email, a reset link has been sent."}
 
 
@@ -212,7 +216,10 @@ async def reset_password(body: ResetIn):
     if not doc or expires < datetime.now(timezone.utc):
         raise HTTPException(400, "This reset link is invalid or has expired. Please request a new one.")
     user = await db.users.find_one({"_id": ObjectId(doc["user_id"])})
-    await db.users.update_one({"_id": user["_id"]}, {"$set": {"password_hash": hash_password(body.password)}})
+    if not user:
+        raise HTTPException(400, "This reset link is invalid or has expired. Please request a new one.")
+    await db.users.update_one({"_id": user["_id"]}, {"$set": {"password_hash": hash_password(body.password)},
+                                                     "$inc": {"token_version": 1}})
     await db.password_reset_tokens.update_many({"user_id": doc["user_id"]}, {"$set": {"used": True}})
     await db.login_attempts.delete_many({"identifier": user["email"]})
     return {"message": "Your password has been reset. You can now log in."}
@@ -222,8 +229,10 @@ async def reset_password(body: ResetIn):
 async def change_password(body: ChangePasswordIn, user: dict = Depends(current_user)):
     if not user.get("password_hash") or not verify_password(body.current_password, user["password_hash"]):
         raise HTTPException(400, "Your current password is incorrect")
-    await db.users.update_one({"_id": user["_id"]}, {"$set": {"password_hash": hash_password(body.new_password)}})
-    return {"message": "Password changed"}
+    tv = user.get("token_version", 0) + 1
+    await db.users.update_one({"_id": user["_id"]}, {"$set": {"password_hash": hash_password(body.new_password),
+                                                              "token_version": tv}})
+    return {"message": "Password changed", "token": make_token(str(user["_id"]), tv)}
 
 
 @api.put("/profile")
@@ -353,7 +362,7 @@ async def google_login(body: GoogleIn):
         res = await db.users.insert_one(doc)
         doc["_id"] = res.inserted_id
         user = doc
-    return {"token": make_token(str(user["_id"])), "user": public_user(user)}
+    return {"token": make_token(str(user["_id"]), user.get("token_version", 0)), "user": public_user(user)}
 
 
 # ---------- AI practice (Emergent LLM key) ----------

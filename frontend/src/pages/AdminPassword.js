@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { api, errorText } from "@/lib/api";
+import { api, errorText, setToken } from "@/lib/api";
 
 export default function AdminPassword() {
   const [f, setF] = useState({ current: "", next: "", confirm: "" });
@@ -15,7 +15,8 @@ export default function AdminPassword() {
     if (f.next !== f.confirm) return setError("The new passwords do not match.");
     setBusy(true);
     try {
-      await api.post("/auth/change-password", { current_password: f.current, new_password: f.next });
+      const { data } = await api.post("/auth/change-password", { current_password: f.current, new_password: f.next });
+      setToken(data.token);
       toast.success("Password changed");
       setF({ current: "", next: "", confirm: "" });
     } catch (err) {

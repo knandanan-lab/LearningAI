@@ -19,8 +19,8 @@ ADMIN = {"email": "knandanan@gmail.com", "password": "z-lQI9UdjCj48kvM"}
 mdb = MongoClient(os.environ["MONGO_URL"])[os.environ["DB_NAME"]]
 
 
-def login(email, pw):
-    return requests.post(f"{API}/auth/login", json={"email": email, "password": pw})
+def login(email, password):
+    return requests.post(f"{API}/auth/login", json={"email": email, "password": password})
 
 
 def hdr(tok):
@@ -186,3 +186,42 @@ class TestStats:
 
     def test_stats_learner_forbidden(self, learner):
         assert requests.get(f"{API}/admin/stats", headers=hdr(learner["token"])).status_code == 403
+
+
+# Forgot-password rate limit (pre-seed 3 recent tokens so no real email is sent)
+class TestRateLimit:
+    def test_fourth_request_creates_no_token(self, learner):
+        mdb.password_reset_tokens.delete_many({"user_id": learner["id"]})
+        now = datetime.now(timezone.utc)
+        for i in range(3):
+            mdb.password_reset_tokens.insert_one({
+                "token_hash": uuid.uuid4().hex, "user_id": learner["id"], "created_at": now,
+                "expires_at": now + timedelta(hours=1), "used": False})
+        r = requests.post(f"{API}/auth/forgot-password", json={"email": learner["email"]}, timeout=60)
+        assert r.status_code == 200
+        assert "If an account exists" in r.json()["message"]
+        assert mdb.password_reset_tokens.count_documents({"user_id": learner["id"]}) == 3
+
+    def test_old_tokens_do_not_count(self, learner):
+        mdb.password_reset_tokens.update_many({"user_id": learner["id"]},
+                                              {"$set": {"created_at": datetime.now(timezone.utc) - timedelta(hours=2)}})
+        r = requests.post(f"{API}/auth/forgot-password", json={"email": learner["email"].upper()}, timeout=60)
+        assert r.status_code == 200
+        assert mdb.password_reset_tokens.count_documents({"user_id": learner["id"]}) == 4
+
+
+# Admin change own password and restore
+class TestAdminChange:
+    def test_admin_change_and_restore(self, admin_tok):
+        tmp = "TempAdmin_" + uuid.uuid4().hex[:6]
+        try:
+            r = requests.post(f"{API}/auth/change-password", headers=hdr(admin_tok),
+                              json={"current_password": ADMIN["password"], "new_password": tmp})
+            assert r.status_code == 200, r.text
+            assert login(ADMIN["email"], tmp).status_code == 200
+        finally:
+            r2 = requests.post(f"{API}/auth/change-password", headers=hdr(admin_tok),
+                               json={"current_password": tmp, "new_password": ADMIN["password"]})
+            mdb.login_attempts.delete_many({"identifier": ADMIN["email"]})
+        assert r2.status_code == 200
+        assert login(ADMIN["email"], ADMIN["password"]).status_code == 200

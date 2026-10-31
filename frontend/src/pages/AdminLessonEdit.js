@@ -16,7 +16,13 @@ export default function AdminLessonEdit() {
   const [f, setF] = useState(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    api.get(`/lessons/${id}`).then(({ data }) => setF({ ...data, reviewText: data.review.join("\n") }));
+    let active = true;
+    api.get(`/lessons/${id}`).then(({ data }) => {
+      if (active) setF((cur) => cur || { ...data, reviewText: data.review.join("\n") });
+    });
+    return () => {
+      active = false;
+    };
   }, [id]);
   if (!f) return null;
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
