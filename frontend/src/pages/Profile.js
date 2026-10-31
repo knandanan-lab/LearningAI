@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { api, errorText } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import ProfileFields from "@/components/ProfileFields";
+import ChangePasswordForm from "@/components/ChangePasswordForm";
 
 export default function Profile() {
   const { user, setUser } = useAuth();
@@ -41,6 +42,18 @@ export default function Profile() {
           {busy ? "Saving…" : onboarding ? "Continue" : "Save changes"}
         </button>
       </form>
+      {!onboarding && (
+        <section className="mt-12 pt-8 border-t border-[var(--line)]" data-testid="profile-password-section">
+          <h2 className="text-xl font-semibold mb-4">Change password</h2>
+          {user.has_password ? (
+            <ChangePasswordForm />
+          ) : (
+            <p className="text-sm text-[var(--muted)]" data-testid="profile-google-password-note">
+              You sign in with Google, so you do not have an AI in 15 password. To add one, use “Forgotten your password?” on the log-in page.
+            </p>
+          )}
+        </section>
+      )}
     </div>
   );
 }

@@ -109,6 +109,26 @@ async def send_email(*, to: str, subject: str, html: str) -> str | None:
         raise HTTPException(502, "Failed to send email")
 
 
+def welcome_email_html(first_name: str, link: str) -> str:
+    brand = escape(os.environ["EMAIL_FROM_NAME"])
+    name = escape(first_name or "there")
+    safe = escape(link, quote=True)
+    return (
+        '<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#14211c">'
+        f'<h2 style="color:#0f4c3a;margin:0 0 16px">Welcome to {brand}, {name}</h2>'
+        "<p>Make AI work for your work. Learn one practical AI skill in 15 minutes a day and use it to make "
+        "everyday work easier.</p>"
+        "<p>Your first lesson, <strong>Day 1: Meet your AI assistant</strong>, helps you choose a suitable "
+        "everyday task for AI. Learn at your own pace; you do not need to learn every day.</p>"
+        f'<p style="margin:24px 0"><a href="{safe}" style="background:#0f4c3a;color:#ffffff;padding:12px 22px;'
+        'border-radius:999px;text-decoration:none;display:inline-block">Start Day 1</a></p>'
+        "<p>Remember: do not enter confidential business information, personal data or sensitive client "
+        "information into an AI tool unless your organisation has approved its use.</p>"
+        f'<p style="font-size:12px;color:#888">Sent by {brand} - A Future Options learning initiative. '
+        "We never ask for your password by email.</p></td></tr></table>"
+    )
+
+
 def reset_email_html(link: str) -> str:
     brand = escape(os.environ["EMAIL_FROM_NAME"])
     safe = escape(link, quote=True)

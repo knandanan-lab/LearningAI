@@ -25,7 +25,7 @@ from pydantic import BaseModel, EmailStr, Field
 from starlette.middleware.cors import CORSMiddleware
 
 from lessons_seed import CATEGORIES, build_lessons
-from emailer import send_email, reset_email_html
+from emailer import send_email, reset_email_html, welcome_email_html
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
 db = client[os.environ['DB_NAME']]
@@ -54,6 +54,7 @@ def public_user(u: dict) -> dict:
         "id": str(u["_id"]), "email": u["email"], "first_name": u.get("first_name", ""),
         "country": u.get("country", ""), "work_function": u.get("work_function", ""),
         "ai_experience": u.get("ai_experience", ""), "role": u.get("role", "learner"),
+        "has_password": bool(u.get("password_hash")),
     }
 
 
@@ -126,7 +127,7 @@ class LessonIn(BaseModel):
 
 # ---------- Auth ----------
 @api.post("/auth/register")
-async def register(body: RegisterIn):
+async def register(body: RegisterIn, background: BackgroundTasks):
     email = body.email.lower()
     if await db.users.find_one({"email": email}):
         raise HTTPException(400, "An account with this email already exists")
@@ -135,6 +136,7 @@ async def register(body: RegisterIn):
                created_at=datetime.now(timezone.utc).isoformat())
     res = await db.users.insert_one(doc)
     doc["_id"] = res.inserted_id
+    background.add_task(send_welcome, email, doc["first_name"])
     return {"token": make_token(str(res.inserted_id)), "user": public_user(doc)}
 
 
@@ -189,6 +191,24 @@ async def send_reset(email: str, link: str):
         logging.exception("Password reset email failed")
 
 
+async def send_welcome(email: str, first_name: str):
+    first = await db.lessons.find_one({}, {"_id": 0, "id": 1}, sort=[("order", 1)])
+    link = f"{os.environ['FRONTEND_URL'].rstrip('/')}/lessons/{first['id']}"
+    try:
+        await send_email(to=email, subject="Welcome to AI in 15", html=welcome_email_html(first_name, link))
+    except Exception:
+        logging.exception("Welcome email failed")
+
+
+async def create_reset_link(user: dict) -> str:
+    token = secrets.token_urlsafe(32)
+    now = datetime.now(timezone.utc)
+    await db.password_reset_tokens.insert_one({
+        "token_hash": hashlib.sha256(token.encode()).hexdigest(), "user_id": str(user["_id"]),
+        "created_at": now, "expires_at": now + timedelta(hours=1), "used": False})
+    return f"{os.environ['FRONTEND_URL'].rstrip('/')}/reset-password?token={token}"
+
+
 @api.post("/auth/forgot-password")
 async def forgot_password(body: ForgotIn, background: BackgroundTasks):
     email = body.email.lower()
@@ -196,14 +216,16 @@ async def forgot_password(body: ForgotIn, background: BackgroundTasks):
     hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
     if user and await db.password_reset_tokens.count_documents(
             {"user_id": str(user["_id"]), "created_at": {"$gt": hour_ago}}) < 3:
-        token = secrets.token_urlsafe(32)
-        now = datetime.now(timezone.utc)
-        await db.password_reset_tokens.insert_one({
-            "token_hash": hashlib.sha256(token.encode()).hexdigest(), "user_id": str(user["_id"]),
-            "created_at": now, "expires_at": now + timedelta(hours=1), "used": False})
-        link = f"{os.environ['FRONTEND_URL'].rstrip('/')}/reset-password?token={token}"
-        background.add_task(send_reset, email, link)
+        background.add_task(send_reset, email, await create_reset_link(user))
     return {"message": "If an account exists for this email, a reset link has been sent."}
+
+
+@api.post("/admin/reset-link")
+async def admin_reset_link(body: ForgotIn, _: dict = Depends(admin_user)):
+    user = await db.users.find_one({"email": body.email.lower()})
+    if not user:
+        raise HTTPException(404, "No account found with this email")
+    return {"link": await create_reset_link(user), "expires_in_minutes": 60}
 
 
 @api.post("/auth/reset-password")
@@ -346,7 +368,7 @@ class GoogleIn(BaseModel):
 
 
 @api.post("/auth/google")
-async def google_login(body: GoogleIn):
+async def google_login(body: GoogleIn, background: BackgroundTasks):
     async with httpx.AsyncClient(timeout=15) as hc:
         r = await hc.get("https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
                          headers={"X-Session-ID": body.session_id})
@@ -362,6 +384,7 @@ async def google_login(body: GoogleIn):
         res = await db.users.insert_one(doc)
         doc["_id"] = res.inserted_id
         user = doc
+        background.add_task(send_welcome, email, doc["first_name"])
     return {"token": make_token(str(user["_id"]), user.get("token_version", 0)), "user": public_user(user)}
 
 
