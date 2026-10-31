@@ -7,12 +7,9 @@ load_dotenv(ROOT_DIR / '.env')
 import os
 import json
 import uuid
-import asyncio
 import hashlib
 import secrets
-import smtplib
 import logging
-from email.message import EmailMessage
 import httpx
 from fastapi.responses import StreamingResponse
 from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
@@ -28,6 +25,7 @@ from pydantic import BaseModel, EmailStr, Field
 from starlette.middleware.cors import CORSMiddleware
 
 from lessons_seed import CATEGORIES, build_lessons
+from emailer import send_email, reset_email_html
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
 db = client[os.environ['DB_NAME']]
@@ -184,33 +182,21 @@ class ChangePasswordIn(BaseModel):
     new_password: str = Field(min_length=8, max_length=128)
 
 
-def send_reset_email(to: str, link: str):
-    sender = os.environ["GMAIL_ADDRESS"]
-    msg = EmailMessage()
-    msg["Subject"] = "Reset your AI in 15 password"
-    msg["From"] = f"AI in 15 <{sender}>"
-    msg["To"] = to
-    msg.set_content(
-        "Hello,\n\nWe received a request to reset your AI in 15 password. Use the link below within one hour:\n\n"
-        f"{link}\n\nIf you did not ask for this, you can ignore this email. Your password will not change.\n\n"
-        "AI in 15 - A Future Options learning initiative")
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=20) as s:
-        s.login(sender, os.environ["GMAIL_APP_PASSWORD"])
-        s.send_message(msg)
-
-
 @api.post("/auth/forgot-password")
 async def forgot_password(body: ForgotIn):
     email = body.email.lower()
     user = await db.users.find_one({"email": email})
-    if user:
+    hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+    if user and await db.password_reset_tokens.count_documents(
+            {"user_id": str(user["_id"]), "created_at": {"$gt": hour_ago}}) < 3:
         token = secrets.token_urlsafe(32)
+        now = datetime.now(timezone.utc)
         await db.password_reset_tokens.insert_one({
             "token_hash": hashlib.sha256(token.encode()).hexdigest(), "user_id": str(user["_id"]),
-            "expires_at": datetime.now(timezone.utc) + timedelta(hours=1), "used": False})
+            "created_at": now, "expires_at": now + timedelta(hours=1), "used": False})
         link = f"{os.environ['FRONTEND_URL'].rstrip('/')}/reset-password?token={token}"
         try:
-            await asyncio.to_thread(send_reset_email, email, link)
+            await send_email(to=email, subject="Reset your AI in 15 password", html=reset_email_html(link))
         except Exception:
             logging.exception("Password reset email failed")
     return {"message": "If an account exists for this email, a reset link has been sent."}
