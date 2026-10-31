@@ -192,9 +192,9 @@ async def send_reset(email: str, link: str):
 
 
 async def send_welcome(email: str, first_name: str):
-    first = await db.lessons.find_one({}, {"_id": 0, "id": 1}, sort=[("order", 1)])
-    link = f"{os.environ['FRONTEND_URL'].rstrip('/')}/lessons/{first['id']}"
     try:
+        first = await db.lessons.find_one({}, {"_id": 0, "id": 1}, sort=[("order", 1)])
+        link = f"{os.environ['FRONTEND_URL'].rstrip('/')}/lessons/{first['id']}"
         await send_email(to=email, subject="Welcome to AI in 15", html=welcome_email_html(first_name, link))
     except Exception:
         logging.exception("Welcome email failed")
@@ -251,6 +251,8 @@ async def reset_password(body: ResetIn):
 async def change_password(body: ChangePasswordIn, user: dict = Depends(current_user)):
     if not user.get("password_hash") or not verify_password(body.current_password, user["password_hash"]):
         raise HTTPException(400, "Your current password is incorrect")
+    if body.new_password == body.current_password:
+        raise HTTPException(400, "Please choose a new password that is different from your current one")
     tv = user.get("token_version", 0) + 1
     await db.users.update_one({"_id": user["_id"]}, {"$set": {"password_hash": hash_password(body.new_password),
                                                               "token_version": tv}})

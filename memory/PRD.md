@@ -24,6 +24,11 @@ Mobile-friendly MVP “AI in 15” for Future Options Consulting Ltd: helps work
 - Lesson position renumbers the other lessons automatically; admin table shows Yes / Maybe / Not yet reflection counts
 - Sending email is BLOCKED until Universal Key credit is topped up (402 insufficient_credits)
 
+## Iteration 3 (June 2026)
+- Learners can change their password on My profile (Google-only users see a note); admin can create and copy a one-hour reset link (Admin page)
+- Welcome email with a Day 1 link is sent in the background on registration and on first Google sign-in (blocked until Universal Key credit is added)
+- Tested: iteration_3, 100%
+
 ## Backlog
 - P1: Update FRONTEND_URL to the live domain when publishing (reset links use it)
 - P2: Admin view of reflection answers (aggregate); export of stats

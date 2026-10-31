@@ -3,6 +3,9 @@ import os
 import uuid
 import pytest
 import requests
+from dotenv import load_dotenv
+
+load_dotenv("/app/frontend/.env")
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL").rstrip("/")
 API = f"{BASE_URL}/api"

@@ -23,6 +23,15 @@ def login(email, password):
     return requests.post(f"{API}/auth/login", json={"email": email, "password": password})
 
 
+def fresh(learner):
+    """Learner token may be invalidated by reset/change tests (token_version bump); reset pw + re-login."""
+    import bcrypt
+    mdb.users.update_one({"email": learner["email"]},
+                         {"$set": {"password_hash": bcrypt.hashpw(b"Fresh123!x", bcrypt.gensalt()).decode()}})
+    mdb.login_attempts.delete_many({"identifier": learner["email"]})
+    return login(learner["email"], "Fresh123!x").json()["token"]
+
+
 def hdr(tok):
     return {"Authorization": f"Bearer {tok}"}
 
@@ -114,13 +123,18 @@ class TestChange:
         assert r.status_code == 401
 
     def test_wrong_current(self, learner):
-        r = requests.post(f"{API}/auth/change-password", headers=hdr(learner["token"]),
+        r = requests.post(f"{API}/auth/change-password", headers=hdr(fresh(learner)),
                           json={"current_password": "WrongOne!", "new_password": "Abcdefgh1"})
         assert r.status_code == 400
         assert "incorrect" in r.json()["detail"]
 
     def test_change_and_login(self, learner):
-        r = requests.post(f"{API}/auth/change-password", headers=hdr(learner["token"]),
+        import bcrypt
+        mdb.users.update_one({"email": learner["email"]},
+                             {"$set": {"password_hash": bcrypt.hashpw(b"NewPass456!", bcrypt.gensalt()).decode()}})
+        mdb.login_attempts.delete_many({"identifier": learner["email"]})
+        tok = login(learner["email"], "NewPass456!").json()["token"]
+        r = requests.post(f"{API}/auth/change-password", headers=hdr(tok),
                           json={"current_password": "NewPass456!", "new_password": "Changed999!"})
         assert r.status_code == 200, r.text
         assert login(learner["email"], "Changed999!").status_code == 200
@@ -166,7 +180,7 @@ class TestReorder:
         assert [l["id"] for l in self._lessons(admin_tok)] == orig_ids
 
     def test_learner_forbidden(self, learner):
-        r = requests.put(f"{API}/admin/lessons/x", headers=hdr(learner["token"]), json={})
+        r = requests.put(f"{API}/admin/lessons/x", headers=hdr(fresh(learner)), json={})
         assert r.status_code in (403, 422)
 
 
@@ -177,7 +191,7 @@ class TestStats:
         lid = s1["by_lesson"][0]["id"]
         before = s1["by_lesson"][0]["reflections"]
         assert set(before.keys()) == {"Yes", "Maybe", "Not yet"}
-        r = requests.post(f"{API}/progress/{lid}", headers=hdr(learner["token"]), json={"quiz_answer": 0, "reflection": "Yes"})
+        r = requests.post(f"{API}/progress/{lid}", headers=hdr(fresh(learner)), json={"quiz_answer": 0, "reflection": "Yes"})
         assert r.status_code == 200
         s2 = requests.get(f"{API}/admin/stats", headers=hdr(admin_tok)).json()
         after = next(b for b in s2["by_lesson"] if b["id"] == lid)["reflections"]
@@ -185,7 +199,7 @@ class TestStats:
         assert after["Maybe"] == before["Maybe"]
 
     def test_stats_learner_forbidden(self, learner):
-        assert requests.get(f"{API}/admin/stats", headers=hdr(learner["token"])).status_code == 403
+        assert requests.get(f"{API}/admin/stats", headers=hdr(fresh(learner))).status_code == 403
 
 
 # Forgot-password rate limit (pre-seed 3 recent tokens so no real email is sent)
@@ -218,9 +232,10 @@ class TestAdminChange:
             r = requests.post(f"{API}/auth/change-password", headers=hdr(admin_tok),
                               json={"current_password": ADMIN["password"], "new_password": tmp})
             assert r.status_code == 200, r.text
+            new_tok = r.json()["token"]
             assert login(ADMIN["email"], tmp).status_code == 200
         finally:
-            r2 = requests.post(f"{API}/auth/change-password", headers=hdr(admin_tok),
+            r2 = requests.post(f"{API}/auth/change-password", headers=hdr(new_tok),
                                json={"current_password": tmp, "new_password": ADMIN["password"]})
             mdb.login_attempts.delete_many({"identifier": ADMIN["email"]})
         assert r2.status_code == 200

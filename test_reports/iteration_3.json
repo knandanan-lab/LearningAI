@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 3: tested learner Change password (Profile), admin password reset link, welcome email on registration (background), Google-only has_password note, admin /admin/password, and regression (login, dashboard, lesson completion). All new features work in the backend and the UI. 54/54 backend tests pass (AI tests excluded). All UI flows pass. During testing I found and fixed a test-suite bug from iteration 2: TestAdminChange restored the admin password using a token that the first change had already invalidated, so the admin password was left on a random temporary value. I restored the admin password directly in Mongo and fixed the test.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "send_welcome (background)", "issue": "If the lessons collection is empty, first['id'] raises TypeError outside the try block. It is only logged as an unhandled background-task exception and does not affect registration."},
+      {"endpoint": "/api/auth/change-password", "issue": "Accepts a new password identical to the current one. Optional UX improvement."},
+      {"endpoint": "Welcome email", "issue": "Real sends currently fail as expected (insufficient_credits, undeliverable, and also 429 rate-limit seen). Logged as 'Welcome email failed'. Registration is unaffected."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iter3_change_pw_reset_link_welcome.py", "/app/backend/tests/test_iter2_password_reorder.py", "/app/backend/tests/test_ai15_api.py", "/app/test_reports/pytest/pytest_iter3.xml"],
+  "action_items": [
+    "Optional: guard send_welcome against a missing first lesson (move the lookup inside try)",
+    "Optional: reject a new password equal to the current one"
+  ],
+  "critical_code_review_comments": [
+    "change_password and reset_password both bump token_version correctly. The new token is returned and saved by ChangePasswordForm via setToken, so the current session survives and older tokens get 401 (verified).",
+    "admin_reset_link: admin-only (401 no token, 403 learner, 404 unknown, 422 invalid email). Email lookup is case-insensitive. The link is single-use and lasts 1h (verified). It is not rate-limited, which is acceptable for admin use only.",
+    "Background tasks for the welcome email keep registration fast (<10s, typically under 1s)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter3_change_pw_reset_link_welcome.py (new)",
+    "/app/backend/tests/test_iter2_password_reorder.py (fixed stale-token bugs: admin restore now uses the new token; learner tests re-login via fresh())",
+    "/app/backend/tests/test_ai15_api.py (added load_dotenv for REACT_APP_BACKEND_URL)"
+  ],
+  "success_rate": {"backend": "100% (54/54, AI tests excluded)", "frontend": "100%"},
+  "test_credentials": "Admin knandanan@gmail.com / z-lQI9UdjCj48kvM (verified restored, login 200 at end)",
+  "seed_data_creation": "Temporary test_it3* users (including a Google-only user inserted in Mongo with a JWT minted from JWT_SECRET). All cleaned up.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run the suite with the default pytest.ini (-n 2 loadscope) or with -n 0. Deselect tests/test_ai15_api.py::TestAI to skip AI. Any test that changes a password must use the token returned by change-password, because token_version invalidates older tokens. To test Google-only users, insert a user with password_hash '' and sign a JWT {sub, type:'access', tv:0, exp} using JWT_SECRET (HS256).",
+  "rca of the issue": "Admin password left changed: TestAdminChange (iteration 2) called change-password a second time to restore, using the original admin_tok. The first change bumped token_version, so the restore got 401 and the admin was stuck on TempAdmin_xxxx. Mitigation: restored the bcrypt hash in Mongo and changed the test to restore with r.json()['token']."
+}
