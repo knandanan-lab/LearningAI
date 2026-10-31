@@ -29,6 +29,11 @@ Mobile-friendly MVP “AI in 15” for Future Options Consulting Ltd: helps work
 - Welcome email with a Day 1 link is sent in the background on registration and on first Google sign-in (blocked until Universal Key credit is added)
 - Tested: iteration_3, 100%
 
+## Iteration 4 (June 2026) - security follow-up
+- Sign-up limits: 5 per IP per hour (real IP taken TRUSTED_PROXY_HOPS from the right of X-Forwarded-For), 60 per hour overall; in-app AI cap of 500 requests/day across all learners plus 30/user
+- Email confirmation: email-registered learners must confirm (link in welcome email, 24h; resend up to 3/hour) before using in-app AI; Google users, admin and password-reset users count as confirmed
+- Tested: iteration_4 + iteration_5
+
 ## Backlog
 - P1: Update FRONTEND_URL to the live domain when publishing (reset links use it)
 - P2: Admin view of reflection answers (aggregate); export of stats
