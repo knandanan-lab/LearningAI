@@ -14,7 +14,7 @@ function Brand() {
   return (
     <Link to="/" className="flex flex-col leading-tight" data-testid="brand-link">
       <span className="font-display text-xl font-bold text-[var(--green)]">
-        AI in <span className="text-[var(--orange)]">15</span>
+        Learning AI <span className="text-[var(--orange)]">Africa</span>
       </span>
       <span className="text-[11px] text-[var(--muted)]">A Future Options learning initiative</span>
     </Link>
