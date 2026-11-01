@@ -16,7 +16,10 @@ function Brand() {
       <span className="font-display text-xl font-bold text-[var(--green)]">
         Learning AI <span className="text-[var(--orange)]">Africa</span>
       </span>
-      <span className="text-[11px] text-[var(--muted)]">A Future Options learning initiative</span>
+      <span className="flex items-center gap-1.5 text-[11px] text-[var(--muted)]">
+        <img src="/future-options-mark.png" alt="Future Options logo" width="18" height="18" className="h-[18px] w-[18px]" data-testid="header-fo-logo" />
+        A Future Options learning initiative
+      </span>
     </Link>
   );
 }
@@ -62,8 +65,11 @@ export default function Layout({ children }) {
       </header>
       <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">{children}</main>
       <footer className="border-t border-[var(--line)] bg-[var(--wash)]">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 text-sm text-[var(--muted)] flex flex-wrap gap-x-6 gap-y-2 justify-between">
-          <span>Learning AI Africa · A Future Options learning initiative</span>
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 text-sm text-[var(--muted)] flex flex-wrap items-center gap-x-6 gap-y-4 justify-between">
+          <span className="flex items-center gap-4">
+            <img src="/future-options-logo.png" alt="Future Options – consulting for future" width="88" height="64" className="h-16 w-auto" loading="lazy" data-testid="footer-fo-logo" />
+            <span>Learning AI Africa · A Future Options learning initiative</span>
+          </span>
           <span className="flex gap-5">
             <Link to="/responsible-ai" className="hover:text-[var(--green)]" data-testid="footer-guidance-link">Responsible AI</Link>
             <Link to="/privacy" className="hover:text-[var(--green)]" data-testid="footer-privacy-link">Privacy notice</Link>
