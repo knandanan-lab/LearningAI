@@ -2,10 +2,12 @@ import { Link } from "react-router-dom";
 import { CheckCircle2, Circle } from "lucide-react";
 import useLearning from "@/lib/useLearning";
 import ProgressBar from "@/components/ProgressBar";
+import PilotFeedback from "@/components/PilotFeedback";
 
 export default function Pathway() {
   const { lessons, done } = useLearning();
   if (!lessons) return null;
+  const finished = lessons.length > 0 && (done.size >= lessons.length || done.has(lessons[lessons.length - 1].id));
   return (
     <div className="space-y-8 fade-in">
       <div>
@@ -14,6 +16,7 @@ export default function Pathway() {
         <p className="mt-2 text-[var(--muted)]">14 short lessons. Learn at your own pace—you do not need to learn on consecutive days.</p>
       </div>
       <ProgressBar completed={done.size} total={lessons.length} />
+      {finished && <PilotFeedback />}
       <ol className="space-y-2" data-testid="pathway-list">
         {lessons.map((l, i) => (
           <li key={l.id}>

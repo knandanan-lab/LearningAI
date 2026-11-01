@@ -429,6 +429,38 @@ async def admin_stats(_: dict = Depends(admin_user)):
                            "reflections": refl.get(lsn["id"], {"Yes": 0, "Maybe": 0, "Not yet": 0})} for lsn in lessons]}
 
 
+# ---------- Pilot feedback ----------
+FEEDBACK_LABELS = {4: "Very useful", 3: "Useful", 2: "Somewhat useful", 1: "Not very useful"}
+
+
+class FeedbackIn(BaseModel):
+    rating: int = Field(ge=1, le=4)
+    comment: str = Field(default="", max_length=1000)
+
+
+@api.get("/feedback")
+async def my_feedback(user: dict = Depends(current_user)):
+    return await db.feedback.find_one({"user_id": str(user["_id"])}, {"_id": 0, "rating": 1, "comment": 1})
+
+
+@api.put("/feedback")
+async def save_feedback(body: FeedbackIn, user: dict = Depends(current_user)):
+    await db.feedback.update_one(
+        {"user_id": str(user["_id"])},
+        {"$set": {"rating": body.rating, "comment": body.comment.strip(),
+                  "updated_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+    return {"message": "Thank you for your feedback"}
+
+
+@api.get("/admin/feedback")
+async def admin_feedback(_: dict = Depends(admin_user)):
+    docs = await db.feedback.find({}, {"_id": 0, "rating": 1, "comment": 1, "updated_at": 1}).sort("updated_at", -1).to_list(1000)
+    counts = {label: sum(1 for d in docs if d["rating"] == r) for r, label in FEEDBACK_LABELS.items()}
+    comments = [{"rating": FEEDBACK_LABELS[d["rating"]], "comment": d["comment"], "date": d["updated_at"][:10]}
+                for d in docs if d.get("comment")]
+    return {"responses": len(docs), "counts": counts, "comments": comments[:100]}
+
+
 # ---------- Google sign-in (Emergent managed) ----------
 class GoogleIn(BaseModel):
     session_id: str

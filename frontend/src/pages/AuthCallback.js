@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api, errorText } from "@/lib/api";
 import { useAuth, profileComplete } from "@/context/AuthContext";
+import { takeReturn } from "@/lib/returnTo";
 
 export default function AuthCallback() {
   const navigate = useNavigate();
@@ -18,7 +19,7 @@ export default function AuthCallback() {
       .post("/auth/google", { session_id: sessionId })
       .then(({ data }) => {
         signIn(data);
-        navigate(profileComplete(data.user) ? "/dashboard" : "/complete-profile", { replace: true });
+        navigate(profileComplete(data.user) ? takeReturn() : "/complete-profile", { replace: true });
       })
       .catch((e) => {
         toast.error(errorText(e));

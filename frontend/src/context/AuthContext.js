@@ -22,17 +22,20 @@ export function AuthProvider({ children }) {
     refresh();
   }, [refresh]);
 
+  const [signedOut, setSignedOut] = useState(false);
   const signIn = ({ token, user: u }) => {
     setToken(token);
+    setSignedOut(false);
     setUser(u);
   };
   const signOut = () => {
     setToken(null);
+    setSignedOut(true);
     setUser(false);
   };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, signIn, signOut, refresh }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ user, setUser, signIn, signOut, refresh, signedOut }}>{children}</AuthContext.Provider>
   );
 }
 

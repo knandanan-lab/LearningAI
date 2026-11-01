@@ -5,6 +5,7 @@ import { api, errorText } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import ProfileFields from "@/components/ProfileFields";
 import ChangePasswordForm from "@/components/ChangePasswordForm";
+import { takeReturn } from "@/lib/returnTo";
 
 export default function Profile() {
   const { user, setUser } = useAuth();
@@ -24,7 +25,7 @@ export default function Profile() {
       const { data } = await api.put("/profile", form);
       setUser(data);
       toast.success("Profile saved");
-      if (onboarding) navigate("/dashboard");
+      if (onboarding) navigate(takeReturn(), { replace: true });
     } catch (err) {
       toast.error(errorText(err));
     } finally {

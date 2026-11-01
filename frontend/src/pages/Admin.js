@@ -4,6 +4,7 @@ import { KeyRound, Pencil } from "lucide-react";
 import { api } from "@/lib/api";
 import { categoryName } from "@/lib/constants";
 import AdminResetLink from "@/components/AdminResetLink";
+import AdminFeedback from "@/components/AdminFeedback";
 
 export default function Admin() {
   const [stats, setStats] = useState(null);
@@ -53,6 +54,7 @@ export default function Admin() {
       <p className="text-sm text-[var(--muted)] max-w-2xl">
         Changes to a lesson update the pathway, task library and prompt library immediately. Setting a lesson’s “Order” moves it to that position and renumbers the other lessons automatically. Reflection counts show answers to “Do you expect to use this skill in your work?”.
       </p>
+      <AdminFeedback />
       <AdminResetLink />
     </div>
   );

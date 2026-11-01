@@ -22,16 +22,20 @@ import AdminPassword from "@/pages/AdminPassword";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
 import VerifyEmail from "@/pages/VerifyEmail";
+import { saveReturn } from "@/lib/returnTo";
 
 function Loading() {
   return <div className="p-10 text-center text-[var(--muted)]" data-testid="page-loading">Loading…</div>;
 }
 
 function Protected({ children, admin = false }) {
-  const { user } = useAuth();
+  const { user, signedOut } = useAuth();
   const location = useLocation();
   if (user === null) return <Loading />;
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) {
+    if (!signedOut) saveReturn(location.pathname + location.search);
+    return <Navigate to="/login" replace />;
+  }
   if (!profileComplete(user) && location.pathname !== "/complete-profile") return <Navigate to="/complete-profile" replace />;
   if (admin && user.role !== "admin") return <Navigate to="/dashboard" replace />;
   return children;

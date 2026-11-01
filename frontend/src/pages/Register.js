@@ -4,6 +4,7 @@ import { api, errorText } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import ProfileFields from "@/components/ProfileFields";
 import GoogleButton from "@/components/GoogleButton";
+import { takeReturn } from "@/lib/returnTo";
 
 export default function Register() {
   const [form, setForm] = useState({ email: "", password: "", first_name: "", country: "", work_function: "", ai_experience: "" });
@@ -20,7 +21,7 @@ export default function Register() {
     try {
       const { data } = await api.post("/auth/register", form);
       signIn(data);
-      navigate("/dashboard");
+      navigate(takeReturn(), { replace: true });
     } catch (err) {
       setError(errorText(err));
     } finally {
