@@ -1,4 +1,4 @@
-# AI in 15 — PRD
+# Learning AI Africa (formerly "AI in 15") — PRD
 
 ## Original problem statement
 Mobile-friendly MVP “AI in 15” for Future Options Consulting Ltd: helps working professionals in Africa learn practical AI skills in ~15 min/day. British English. Core journey: account → choose task/lesson → learn → copy/adapt prompt → quick check → record completion/progress. 14-lesson pathway “AI at Work: Foundations”, task browser, prompt library with favourites, responsible-AI guidance, privacy notice, secure admin (edit lessons/MCQs/categories/order, aggregate stats). Out of scope: payments, reminders, certificates, social, video, translation, gamification. Do not publish without instruction.

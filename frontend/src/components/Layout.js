@@ -63,7 +63,7 @@ export default function Layout({ children }) {
       <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">{children}</main>
       <footer className="border-t border-[var(--line)] bg-[var(--wash)]">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 text-sm text-[var(--muted)] flex flex-wrap gap-x-6 gap-y-2 justify-between">
-          <span>AI in 15 · A Future Options learning initiative</span>
+          <span>Learning AI Africa · A Future Options learning initiative</span>
           <span className="flex gap-5">
             <Link to="/responsible-ai" className="hover:text-[var(--green)]" data-testid="footer-guidance-link">Responsible AI</Link>
             <Link to="/privacy" className="hover:text-[var(--green)]" data-testid="footer-privacy-link">Privacy notice</Link>

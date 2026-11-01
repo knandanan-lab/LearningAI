@@ -11,7 +11,7 @@ export default function Welcome() {
   return (
     <div className="space-y-14 fade-in">
       <section className="max-w-2xl">
-        <p className="eyebrow mb-4">AI in 15 · A Future Options learning initiative</p>
+        <p className="eyebrow mb-4">Learning AI Africa · A Future Options learning initiative</p>
         <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-[var(--green)] leading-[1.05]" data-testid="welcome-headline">
           Make AI work for your work.
         </h1>
@@ -37,7 +37,7 @@ export default function Welcome() {
       <section className="rounded-2xl bg-[var(--green-soft)] p-6 sm:p-8 max-w-3xl" data-testid="welcome-responsibility-note">
         <h2 className="text-lg font-semibold text-[var(--green)]">You stay responsible for the result</h2>
         <p className="mt-2 text-sm sm:text-base leading-relaxed">
-          AI in 15 supports your learning. AI tools can be wrong or invent information, so you remain responsible
+          Learning AI Africa supports your learning. AI tools can be wrong or invent information, so you remain responsible
           for reviewing and checking any AI-generated work before you use it.{" "}
           <Link to="/responsible-ai" className="underline text-[var(--green)]">Read our responsible AI guidance</Link>.
         </p>

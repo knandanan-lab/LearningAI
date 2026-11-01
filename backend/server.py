@@ -215,7 +215,7 @@ class ChangePasswordIn(BaseModel):
 
 async def send_reset(email: str, link: str):
     try:
-        await send_email(to=email, subject="Reset your AI in 15 password", html=reset_email_html(link))
+        await send_email(to=email, subject="Reset your Learning AI Africa password", html=reset_email_html(link))
     except Exception:
         logging.exception("Password reset email failed")
 
@@ -224,14 +224,14 @@ async def send_welcome(email: str, first_name: str, verify_link: Optional[str] =
     try:
         first = await db.lessons.find_one({}, {"_id": 0, "id": 1}, sort=[("order", 1)])
         link = f"{os.environ['FRONTEND_URL'].rstrip('/')}/lessons/{first['id']}"
-        await send_email(to=email, subject="Welcome to AI in 15", html=welcome_email_html(first_name, link, verify_link))
+        await send_email(to=email, subject="Welcome to Learning AI Africa", html=welcome_email_html(first_name, link, verify_link))
     except Exception:
         logging.exception("Welcome email failed")
 
 
 async def send_verify(email: str, link: str):
     try:
-        await send_email(to=email, subject="Confirm your AI in 15 email address", html=verify_email_html(link))
+        await send_email(to=email, subject="Confirm your Learning AI Africa email address", html=verify_email_html(link))
     except Exception:
         logging.exception("Verification email failed")
 

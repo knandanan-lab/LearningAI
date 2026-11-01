@@ -47,7 +47,7 @@ export default function Login() {
       <div className="my-5 text-center text-xs text-[var(--muted)]">or</div>
       <GoogleButton />
       <p className="mt-6 text-sm text-center">
-        New to AI in 15? <Link to="/register" className="text-[var(--green)] underline" data-testid="go-to-register-link">Create an account</Link>
+        New to Learning AI Africa? <Link to="/register" className="text-[var(--green)] underline" data-testid="go-to-register-link">Create an account</Link>
       </p>
     </div>
   );
