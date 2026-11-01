@@ -16,7 +16,7 @@ export default function Pathway() {
         <p className="mt-2 text-[var(--muted)]">14 short lessons. Learn at your own pace—you do not need to learn on consecutive days.</p>
       </div>
       <ProgressBar completed={done.size} total={lessons.length} />
-      {finished && <PilotFeedback />}
+      {finished && <PilotFeedback allDone={done.size >= lessons.length} />}
       <ol className="space-y-2" data-testid="pathway-list">
         {lessons.map((l, i) => (
           <li key={l.id}>

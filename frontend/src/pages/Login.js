@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { api, errorText } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import GoogleButton from "@/components/GoogleButton";
-import { takeReturn } from "@/lib/returnTo";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -11,7 +10,6 @@ export default function Login() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const { signIn } = useAuth();
-  const navigate = useNavigate();
 
   const submit = async (e) => {
     e.preventDefault();
@@ -20,7 +18,6 @@ export default function Login() {
     try {
       const { data } = await api.post("/auth/login", { email, password });
       signIn(data);
-      navigate(takeReturn(), { replace: true });
     } catch (err) {
       setError(errorText(err));
     } finally {

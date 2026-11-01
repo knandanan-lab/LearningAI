@@ -22,7 +22,7 @@ import AdminPassword from "@/pages/AdminPassword";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
 import VerifyEmail from "@/pages/VerifyEmail";
-import { saveReturn } from "@/lib/returnTo";
+import { saveReturn, peekReturn, clearReturn } from "@/lib/returnTo";
 
 function Loading() {
   return <div className="p-10 text-center text-[var(--muted)]" data-testid="page-loading">Loading…</div>;
@@ -38,13 +38,14 @@ function Protected({ children, admin = false }) {
   }
   if (!profileComplete(user) && location.pathname !== "/complete-profile") return <Navigate to="/complete-profile" replace />;
   if (admin && user.role !== "admin") return <Navigate to="/dashboard" replace />;
+  if (location.pathname !== "/complete-profile") clearReturn();
   return children;
 }
 
 function PublicOnly({ children }) {
   const { user } = useAuth();
   if (user === null) return <Loading />;
-  return user ? <Navigate to="/dashboard" replace /> : children;
+  return user ? <Navigate to={peekReturn()} replace /> : children;
 }
 
 function AppRouter() {

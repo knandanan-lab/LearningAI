@@ -5,7 +5,7 @@ import { api, errorText } from "@/lib/api";
 
 const OPTIONS = [[4, "Very useful"], [3, "Useful"], [2, "Somewhat useful"], [1, "Not very useful"]];
 
-export default function PilotFeedback() {
+export default function PilotFeedback({ allDone }) {
   const [rating, setRating] = useState(null);
   const [comment, setComment] = useState("");
   const [saved, setSaved] = useState(false);
@@ -38,7 +38,7 @@ export default function PilotFeedback() {
   return (
     <section className="card p-5 sm:p-6 space-y-4" data-testid="pilot-feedback">
       <h2 className="text-lg font-semibold flex items-center gap-2">
-        <MessageSquareHeart size={20} className="text-[var(--orange)]" /> You have finished the pathway. Tell us what you think
+        <MessageSquareHeart size={20} className="text-[var(--orange)]" /> {allDone ? "You have finished the pathway." : "You have reached the end of the pathway."} Tell us what you think
       </h2>
       <form onSubmit={submit} className="space-y-4">
         <fieldset>

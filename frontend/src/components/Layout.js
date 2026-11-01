@@ -12,13 +12,13 @@ const NAV = [
 
 function Brand() {
   return (
-    <Link to="/" className="flex flex-col leading-tight" data-testid="brand-link">
-      <span className="font-display text-xl font-bold text-[var(--green)]">
-        Learning AI <span className="text-[var(--orange)]">Africa</span>
-      </span>
-      <span className="flex items-center gap-1.5 text-[11px] text-[var(--muted)]">
-        <img src="/future-options-mark.png" alt="Future Options logo" width="18" height="18" className="h-[18px] w-[18px]" data-testid="header-fo-logo" />
-        A Future Options learning initiative
+    <Link to="/" className="flex items-center gap-3" data-testid="brand-link">
+      <img src="/future-options-logo.png" alt="Future Options – consulting for future" width="66" height="48" className="h-12 w-auto shrink-0" data-testid="header-fo-logo" />
+      <span className="flex flex-col leading-tight">
+        <span className="font-display text-xl font-bold text-[var(--green)]">
+          Learning AI <span className="text-[var(--orange)]">Africa</span>
+        </span>
+        <span className="text-[11px] text-[var(--muted)]">A Future Options learning initiative</span>
       </span>
     </Link>
   );

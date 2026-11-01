@@ -1,0 +1,31 @@
+{
+  "summary": "Iteration 7: tested icons/manifest, return-after-login/register, logout-no-return, public verify-email, pilot feedback (learner UI + API), admin feedback section, privacy notice, plus core regression. Backend 17/17 new tests + 27/27 regression pass. Frontend: icons, pilot feedback, admin feedback, privacy, logout flows, verify-email all PASS. CRITICAL: Return-after-login and return-after-register DO NOT WORK - user always lands on /dashboard even though sessionStorage 'ai15_return' is correctly saved.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Return after login / register (/lessons/lesson-05, /prompts, /lessons/lesson-03)", "issue": "After login/register the learner lands on /dashboard instead of the saved path. Reproduced 3/3 (lesson-05 login, prompts login, lesson-03 register). sessionStorage ai15_return held the correct path right before submit. RCA: react-router-dom 7.18 BrowserRouter wraps location updates in React.startTransition. In Login/Register, signIn() calls setUser (urgent update) and navigate(takeReturn()) is a transition, so React first renders with user set while location is still /login. PublicOnly then renders <Navigate to=\"/dashboard\" replace />, whose effect overrides the saved-path navigation. takeReturn() has already removed the key, so the path is lost.", "affected_selectors": ["login-submit-button", "register-submit-button"]}
+    ],
+    "design_issues": [
+      {"screen": "/pathway pilot feedback", "issues": ["The heading says 'You have finished the pathway' even when only the last lesson (lesson-14) is done (for example 1 of 14 completed). This follows the spec, but the wording may confuse learners. Consider softer copy when done.size < lessons.length."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter7_feedback_icons.py", "/app/backend/tests/helpers_iter7_seed.py", "/app/test_reports/pytest/iter7.xml"],
+  "action_items": [
+    "Fix return-after-login: make PublicOnly respect the saved path (e.g. add peekReturn() and use <Navigate to={peekReturn() || '/dashboard'} />, letting Login/Register/AuthCallback consume it). Alternatives: wrap signIn in flushSync after navigate, call navigate before signIn, or drop the PublicOnly redirect while a login submit is in progress. Check that AuthCallback (Google) and Profile onboarding (takeReturn) do not hit the same race. Retest /lessons/lesson-05, /prompts and register from /lessons/lesson-03.",
+    "Optional: index.html changes need a frontend restart in dev (CRA does not hot-reload public/index.html). The tester restarted the frontend because the stale head was being served before that."
+  ],
+  "critical_code_review_comments": [
+    "App.js PublicOnly always redirects to /dashboard, which conflicts with the takeReturn() logic in Login/Register (see RCA).",
+    "PilotFeedback.js: the GET /feedback useEffect has no .catch, so a network error gives an unhandled rejection with no UI error state.",
+    "Feedback docs are not deleted if a user account is removed. There is no account deletion endpoint today, but keep this in mind for privacy.",
+    "Backend feedback endpoints are fine: Pydantic validation (1-4, max 1000), upsert gives one doc per user, admin output has no names/user_id, _id is excluded."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter7_feedback_icons.py", "/app/backend/tests/helpers_iter7_seed.py"],
+  "success_rate": {"backend": "100% (17/17 new, 27/27 regression)", "frontend": "~80% (return-after-login and return-after-register fail; all others pass)"},
+  "seed_data_creation": "Temporary test_ui7@example.com and test_ui7_reg@example.com learners plus their progress/feedback were created and then removed. signup_log and login_attempts were cleared. db.feedback is now empty.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run pytest with '-n 0' (pytest.ini uses xdist, so module fixtures get duplicated). helpers_iter7_seed.py seed|complete-last|cleanup creates the test_ui7 learner and completes the last lesson. Things to retest: logged out /lessons/lesson-05 -> login -> should land on lesson-05; register from /lessons/lesson-03.",
+  "rca of the issue": "Repro: logged out, open /lessons/lesson-05 -> Protected saves ai15_return=/lessons/lesson-05 and redirects to /login -> log in -> URL ends at /dashboard. Cause: RR v7 startTransition navigation vs the urgent setUser in signIn; PublicOnly(<Navigate to='/dashboard'>) wins. Mitigation: make PublicOnly read the pending return path (without removing it), or make sure navigation commits before the user state update."
+}
