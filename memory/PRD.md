@@ -34,6 +34,12 @@ Mobile-friendly MVP “AI in 15” for Future Options Consulting Ltd: helps work
 - Email confirmation: email-registered learners must confirm (link in welcome email, 24h; resend up to 3/hour) before using in-app AI; Google users, admin and password-reset users count as confirmed
 - Tested: iteration_4 + iteration_5
 
+## Iteration 5 (June 2026)
+- Renamed to Learning AI Africa; Future Options full logo in header and footer (from the user's PDF); home-screen icons use the full logo; browser-tab favicon uses the key mark
+- Return after login/register to the page the learner clicked (sessionStorage ai15_return; PublicOnly redirects to the saved path)
+- End-of-pathway pilot feedback (rating from 4 to 1 + optional comment, one per learner) on /pathway once the last lesson is done; admin sees counts and comments without names (GET /api/admin/feedback)
+- Tested: iteration_7 + iteration_8
+
 ## Backlog
 - P1: Update FRONTEND_URL to the live domain when publishing (reset links use it)
 - P2: Admin view of reflection answers (aggregate); export of stats

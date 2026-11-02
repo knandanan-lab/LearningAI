@@ -1,16 +1,18 @@
 @import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Lexend:wght@300;400;500;600&display=swap");
 
 :root {
-  --green: #0f4c3a;
-  --green-dark: #0a3629;
-  --green-soft: #e8f1ed;
-  --orange: #d9661f;
-  --orange-soft: #fdf0e6;
-  --ink: #14211c;
-  --muted: #5a6b64;
-  --line: #e2e8e5;
+  --green: #0e4459;
+  --green-dark: #0a3344;
+  --green-soft: #e4f1f8;
+  --sky: #0094cc;
+  --sky-soft: #e2f4fc;
+  --orange: #e0701f;
+  --orange-soft: #fdeee2;
+  --ink: #12232c;
+  --muted: #55687a;
+  --line: #dbe7ee;
   --paper: #ffffff;
-  --wash: #f7f9f8;
+  --wash: #f3f8fb;
 }
 
 body {
@@ -37,7 +39,7 @@ h1, h2, h3, .font-display {
 .btn-primary { background: var(--green); color: #fff; }
 .btn-primary:hover:not(:disabled) { background: var(--green-dark); }
 .btn-accent { background: var(--orange); color: #fff; }
-.btn-accent:hover:not(:disabled) { background: #bf5617; }
+.btn-accent:hover:not(:disabled) { background: #c45f16; }
 .btn-ghost { background: transparent; color: var(--green); border: 1.5px solid var(--green); }
 .btn-ghost:hover:not(:disabled) { background: var(--green-soft); }
 .btn-sm { min-height: 40px; padding: 0 1rem; font-size: .9rem; }
@@ -53,10 +55,17 @@ textarea.field { line-height: 1.55; }
 
 .card { background: #fff; border: 1px solid var(--line); border-radius: 18px; }
 .card-link { transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease; }
-.card-link:hover { border-color: var(--green); transform: translateY(-2px); box-shadow: 0 6px 18px -12px rgba(15,76,58,.45); }
+.card-link:hover { border-color: var(--green); transform: translateY(-2px); box-shadow: 0 8px 20px -12px rgba(14,68,89,.5); }
 
 .eyebrow { text-transform: uppercase; letter-spacing: .14em; font-size: .72rem; font-weight: 500; color: var(--orange); }
 .prose-plain p { margin-bottom: .9rem; line-height: 1.7; }
 
 .fade-in { animation: fadeIn .35s ease both; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+.brand-stripe { height: 4px; background: linear-gradient(90deg, var(--green) 0 55%, var(--sky) 55% 85%, var(--orange) 85% 100%); }
+.icon-chip { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 12px; }
+.chip-sky { background: var(--sky-soft); color: var(--sky); }
+.chip-orange { background: var(--orange-soft); color: var(--orange); }
+.chip-navy { background: var(--green-soft); color: var(--green); }
+.hero-wash { background: linear-gradient(180deg, var(--sky-soft) 0%, #ffffff 100%); }

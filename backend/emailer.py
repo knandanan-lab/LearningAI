@@ -110,7 +110,7 @@ async def send_email(*, to: str, subject: str, html: str) -> str | None:
 
 
 def _button(link: str, label: str) -> str:
-    return (f'<p style="margin:24px 0"><a href="{escape(link, quote=True)}" style="background:#0f4c3a;color:#ffffff;'
+    return (f'<p style="margin:24px 0"><a href="{escape(link, quote=True)}" style="background:#0e4459;color:#ffffff;'
             f'padding:12px 22px;border-radius:999px;text-decoration:none;display:inline-block">{label}</a></p>')
 
 
@@ -118,7 +118,7 @@ def verify_email_html(link: str) -> str:
     brand = escape(os.environ["EMAIL_FROM_NAME"])
     return (
         '<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#14211c">'
-        f'<h2 style="color:#0f4c3a;margin:0 0 16px">Confirm your {brand} email address</h2>'
+        f'<h2 style="color:#0e4459;margin:0 0 16px">Confirm your {brand} email address</h2>'
         "<p>Please confirm your email address to use the in-app AI practice tools. This link expires in 24 hours.</p>"
         + _button(link, "Confirm my email") +
         "<p>If you did not create an account, you can ignore this email.</p>"
@@ -135,13 +135,13 @@ def welcome_email_html(first_name: str, link: str, verify_link: str | None = Non
                "(link valid for 24 hours):</p>" + _button(verify_link, "Confirm my email")) if verify_link else ""
     return (
         '<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#14211c">'
-        f'<h2 style="color:#0f4c3a;margin:0 0 16px">Welcome to {brand}, {name}</h2>'
+        f'<h2 style="color:#0e4459;margin:0 0 16px">Welcome to {brand}, {name}</h2>'
         "<p>Make AI work for your work. Learn one practical AI skill in 15 minutes a day and use it to make "
         "everyday work easier.</p>"
         "<p>Your first lesson, <strong>Day 1: Meet your AI assistant</strong>, helps you choose a suitable "
         "everyday task for AI. Learn at your own pace; you do not need to learn every day.</p>"
         + confirm +
-        f'<p style="margin:24px 0"><a href="{safe}" style="background:#0f4c3a;color:#ffffff;padding:12px 22px;'
+        f'<p style="margin:24px 0"><a href="{safe}" style="background:#0e4459;color:#ffffff;padding:12px 22px;'
         'border-radius:999px;text-decoration:none;display:inline-block">Start Day 1</a></p>'
         "<p>Remember: do not enter confidential business information, personal data or sensitive client "
         "information into an AI tool unless your organisation has approved its use.</p>"
@@ -155,9 +155,9 @@ def reset_email_html(link: str) -> str:
     safe = escape(link, quote=True)
     return (
         '<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#14211c">'
-        f'<h2 style="color:#0f4c3a;margin:0 0 16px">Reset your {brand} password</h2>'
+        f'<h2 style="color:#0e4459;margin:0 0 16px">Reset your {brand} password</h2>'
         "<p>We received a request to reset the password for your account. This link works once and expires in one hour.</p>"
-        f'<p style="margin:24px 0"><a href="{safe}" style="background:#0f4c3a;color:#ffffff;padding:12px 22px;'
+        f'<p style="margin:24px 0"><a href="{safe}" style="background:#0e4459;color:#ffffff;padding:12px 22px;'
         'border-radius:999px;text-decoration:none;display:inline-block">Choose a new password</a></p>'
         "<p>If you did not request this, you can ignore this email. Your password will not change.</p>"
         f'<p style="font-size:12px;color:#888">Sent by {brand} - A Future Options learning initiative. '

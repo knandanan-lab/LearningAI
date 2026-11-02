@@ -1,0 +1,21 @@
+{
+  "summary": "Frontend-only retest of the return-after-login fix, the full Future Options logo change, the pilot feedback heading and a quick regression. All flows pass. The return-after-login race from iteration_7 is fixed: logged-out /lessons/lesson-05 -> /login -> lands on /lessons/lesson-05, and the saved path is cleared afterwards. The same works for /prompts, for /admin with the admin account, and for registering from /lessons/lesson-03 via 'Create an account'. A plain login goes to /dashboard. Logging out from /profile saves no return path, so the next login goes to /dashboard. The header and footer show the full logo with no horizontal overflow at 390px or 1920px. The home-screen icons use the full logo on white. The feedback heading changes correctly between the two states. Dashboard, lesson completion and admin all work, with no console errors.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Header at 390px", "issues": ["With the wider full logo (66x48), the brand text wraps to 'Learning AI / Africa' and the Log out button wraps onto two lines ('Log / out'). Nothing overflows, but the header looks cramped. Suggest adding whitespace-nowrap to the logout button, or using a smaller logo / hiding the tagline below the sm breakpoint.", "At h-12 the 'consulting for future' tagline inside the header logo cannot be read (expected at this size, cosmetic)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/helpers_iter8_seed.py"],
+  "action_items": ["Optional: tighten the mobile header (whitespace-nowrap on logout-button / smaller brand text) so Log out stays on one line at 390px"],
+  "critical_code_review_comments": ["App.js Protected calls clearReturn() (a sessionStorage side effect) during render. It works, but would be cleaner in a useEffect. Low priority.", "The saved return path persists for the whole tab session if a logged-out user leaves the login page and logs in much later. They then land on the old link, which is acceptable."],
+  "updated_files": ["/app/backend/tests/helpers_iter8_seed.py"],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100%"},
+  "test_credentials": "Admin knandanan@gmail.com / z-lQI9UdjCj48kvM (unchanged). Test learners test_ui8@example.com and test_ui8_reg@example.com were created and then deleted.",
+  "seed_data_creation": "Temporary learners test_ui8@example.com / test_ui8_reg@example.com. All their progress, feedback and users were removed, and signup_log / login_attempts were cleared.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "helpers_iter8_seed.py seed|complete-last|complete-all|cleanup manages the test_ui8 learner. The return key is sessionStorage 'ai15_return'. Register form testids: profile-first-name-input, profile-country-select, profile-work-function-select (native selects) and the radio profile-experience-beginner."
+}

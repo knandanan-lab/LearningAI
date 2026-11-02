@@ -29,11 +29,11 @@ export default function Dashboard() {
       </section>
 
       <section className="grid grid-cols-2 lg:grid-cols-3 gap-3" data-testid="task-categories">
-        {CATEGORIES.map((c) => {
+        {CATEGORIES.map((c, i) => {
           const Icon = Icons[c.icon];
           return (
             <Link key={c.id} to={`/tasks?category=${c.id}`} className="card card-link p-4 sm:p-5 flex flex-col gap-3" data-testid={`category-${c.id}`}>
-              <Icon size={22} className="text-[var(--orange)]" />
+              <span className={`icon-chip ${["chip-sky", "chip-orange", "chip-navy"][i % 3]}`}><Icon size={22} /></span>
               <span className="font-medium text-sm sm:text-base leading-snug">{c.name}</span>
             </Link>
           );
@@ -42,7 +42,7 @@ export default function Dashboard() {
 
       <section className="grid md:grid-cols-2 gap-4">
         <div className="card p-6 !bg-[var(--green)] !border-[var(--green)] text-white" data-testid="continue-learning">
-          <p className="text-xs uppercase tracking-[.14em] text-[#f6b98d]">Continue your learning</p>
+          <p className="text-xs uppercase tracking-[.14em] text-[#7fd3f5]">Continue your learning</p>
           {next ? (
             <>
               <h2 className="mt-3 text-xl font-semibold">Day {nextIdx + 1}: {next.title}</h2>
@@ -71,7 +71,7 @@ export default function Dashboard() {
           const Icon = Icons[icon];
           return (
             <Link key={to} to={to} className="card card-link p-4 flex items-center gap-3 text-sm font-medium" data-testid={`dashboard-link-${to.slice(1)}`}>
-              <Icon size={18} className="text-[var(--green)]" /> {label}
+              <Icon size={18} className="text-[var(--sky)]" /> {label}
             </Link>
           );
         })}

@@ -13,9 +13,9 @@ const NAV = [
 function Brand() {
   return (
     <Link to="/" className="flex items-center gap-3" data-testid="brand-link">
-      <img src="/future-options-logo.png" alt="Future Options – consulting for future" width="66" height="48" className="h-12 w-auto shrink-0" data-testid="header-fo-logo" />
+      <img src="/future-options-logo.png" alt="Future Options – consulting for future" width="66" height="48" className="h-10 sm:h-12 w-auto shrink-0" data-testid="header-fo-logo" />
       <span className="flex flex-col leading-tight">
-        <span className="font-display text-xl font-bold text-[var(--green)]">
+        <span className="font-display text-lg sm:text-xl font-bold text-[var(--green)] whitespace-nowrap">
           Learning AI <span className="text-[var(--orange)]">Africa</span>
         </span>
         <span className="text-[11px] text-[var(--muted)]">A Future Options learning initiative</span>
@@ -34,10 +34,11 @@ export default function Layout({ children }) {
   return (
     <div className="min-h-screen flex flex-col">
       <header className="border-b border-[var(--line)] bg-white sticky top-0 z-20">
+        <div className="brand-stripe" aria-hidden="true" />
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
           <Brand />
           {user ? (
-            <button onClick={logout} className="btn btn-ghost btn-sm" data-testid="logout-button">
+            <button onClick={logout} className="btn btn-ghost btn-sm whitespace-nowrap shrink-0" data-testid="logout-button">
               <LogOut size={16} /> Log out
             </button>
           ) : (
