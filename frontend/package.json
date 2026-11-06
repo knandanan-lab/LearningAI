@@ -95,7 +95,6 @@
     "tailwindcss": "3.4.17"
   },
   "resolutions": {
-    "ajv": "^8.0.0",
     "date-fns": "^2.28.0",
     "react-router": "7.18.4",
     "node-forge": "1.4.0",
@@ -128,7 +127,6 @@
     "http-proxy-middleware": "2.0.10"
   },
   "overrides": {
-    "ajv": "^8.0.0",
     "date-fns": "^2.28.0",
     "react-router": "7.18.4",
     "node-forge": "1.4.0",
