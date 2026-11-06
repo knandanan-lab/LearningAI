@@ -124,7 +124,8 @@
     "js-yaml": "4.3.2",
     "minimatch": "5.1.8",
     "picomatch": "2.3.2",
-    "http-proxy-middleware": "2.0.10"
+    "http-proxy-middleware": "2.0.10",
+    "fork-ts-checker-webpack-plugin": "^6.5.3"
   },
   "overrides": {
     "date-fns": "^2.28.0",
@@ -211,6 +212,7 @@
     "tinyglobby": {
       "picomatch": "4.0.4"
     },
-    "http-proxy-middleware": "2.0.10"
+    "http-proxy-middleware": "2.0.10",
+    "fork-ts-checker-webpack-plugin": "^6.5.3"
   }
 }
