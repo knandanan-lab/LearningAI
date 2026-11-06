@@ -90,11 +90,19 @@ def _assert_safe_email(subject: str, html: str) -> None:
                 raise ValueError(f"Anchor text {m.group(1)!r} ≠ real link host {real!r} (G3)")
 
 
+def _brand() -> str:
+    return os.environ.get("EMAIL_FROM_NAME") or "Learning AI Africa"
+
+
 async def send_email(*, to: str, subject: str, html: str) -> str | None:
     _assert_safe_email(subject, html)
+    if not os.environ.get("MAILTRAP_USERNAME"):
+        # Email is optional: without SMTP credentials, skip sending. Don't log the body (it may hold reset links).
+        logger.info(f"Email not configured (MAILTRAP_USERNAME unset); skipped sending {subject!r}")
+        return None
     from_addr = os.environ["EMAIL_FROM_ADDRESS"]
     msg = EmailMessage()
-    msg["From"] = formataddr((os.environ["EMAIL_FROM_NAME"], from_addr))
+    msg["From"] = formataddr((_brand(), from_addr))
     msg["To"] = to
     msg["Subject"] = subject
     msg["Message-ID"] = make_msgid(domain=from_addr.rsplit("@", 1)[-1])
@@ -132,7 +140,7 @@ def _button(link: str, label: str) -> str:
 
 
 def verify_email_html(link: str) -> str:
-    brand = escape(os.environ["EMAIL_FROM_NAME"])
+    brand = escape(_brand())
     return (
         '<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#14211c">'
         f'<h2 style="color:#0e4459;margin:0 0 16px">Confirm your {brand} email address</h2>'
@@ -145,7 +153,7 @@ def verify_email_html(link: str) -> str:
 
 
 def welcome_email_html(first_name: str, link: str, verify_link: str | None = None) -> str:
-    brand = escape(os.environ["EMAIL_FROM_NAME"])
+    brand = escape(_brand())
     name = escape(first_name or "there")
     safe = escape(link, quote=True)
     confirm = ("<p><strong>Please confirm your email address</strong> to use the in-app AI practice tools "
@@ -168,7 +176,7 @@ def welcome_email_html(first_name: str, link: str, verify_link: str | None = Non
 
 
 def reset_email_html(link: str) -> str:
-    brand = escape(os.environ["EMAIL_FROM_NAME"])
+    brand = escape(_brand())
     safe = escape(link, quote=True)
     return (
         '<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#14211c">'
