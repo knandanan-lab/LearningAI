@@ -6,6 +6,7 @@ load_dotenv(ROOT_DIR / '.env')
 
 import os
 import json
+import asyncio
 import uuid
 import hashlib
 import secrets
@@ -27,8 +28,27 @@ from starlette.middleware.cors import CORSMiddleware
 from lessons_seed import CATEGORIES, build_lessons
 from emailer import send_email, reset_email_html, welcome_email_html, verify_email_html
 
-client = AsyncIOMotorClient(os.environ['MONGO_URL'])
-db = client[os.environ['DB_NAME']]
+# MongoDB is connected lazily: the client is only created when a request first touches the database,
+# so a missing or unreachable MongoDB doesn't stop the app from starting.
+_mongo_client: Optional[AsyncIOMotorClient] = None
+
+
+def get_db():
+    global _mongo_client
+    if _mongo_client is None:
+        # Fail fast (5s instead of Motor's default 30s) so requests don't hang while MongoDB is down.
+        _mongo_client = AsyncIOMotorClient(os.environ['MONGO_URL'], serverSelectionTimeoutMS=5000)
+    return _mongo_client[os.environ['DB_NAME']]
+
+
+class _LazyDB:
+    """Stands in for the Motor database so existing `db.<collection>` code works unchanged."""
+
+    def __getattr__(self, name):
+        return getattr(get_db(), name)
+
+
+db = _LazyDB()
 
 app = FastAPI()
 api = APIRouter(prefix="/api")
@@ -582,8 +602,27 @@ app.add_middleware(
 logging.basicConfig(level=logging.INFO)
 
 
-@app.on_event("startup")
-async def startup():
+_db_ready = False
+_db_init_lock = asyncio.Lock()
+
+
+@app.middleware("http")
+async def init_db_on_first_request(request: Request, call_next):
+    # Set up indexes and seed data on the first request instead of at startup. If MongoDB is
+    # unreachable, log it and let the request continue; the next request will try again.
+    global _db_ready
+    if not _db_ready:
+        async with _db_init_lock:
+            if not _db_ready:
+                try:
+                    await init_db()
+                    _db_ready = True
+                except Exception:
+                    logging.exception("MongoDB initialisation failed; will retry on the next request")
+    return await call_next(request)
+
+
+async def init_db():
     await db.users.create_index("email", unique=True)
     await db.progress.create_index([("user_id", 1), ("lesson_id", 1)], unique=True)
     await db.favourites.create_index([("user_id", 1), ("lesson_id", 1)], unique=True)
@@ -609,4 +648,5 @@ async def startup():
 
 @app.on_event("shutdown")
 async def shutdown():
-    client.close()
+    if _mongo_client is not None:
+        _mongo_client.close()
