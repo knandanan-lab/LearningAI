@@ -91,9 +91,10 @@ class TestAuth:
         r = requests.post(f"{API}/auth/login", json={"email": p["email"], "password": p["password"]})
         assert r.status_code == 429
 
-    def test_google_invalid_session(self):
+    def test_google_login_removed(self):
+        # Google sign-in (via Emergent) was removed; the route should no longer exist.
         r = requests.post(f"{API}/auth/google", json={"session_id": "invalid-session-xyz"})
-        assert r.status_code == 401
+        assert r.status_code in (404, 405)
 
 
 # Profile

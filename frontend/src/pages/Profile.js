@@ -50,7 +50,7 @@ export default function Profile() {
             <ChangePasswordForm />
           ) : (
             <p className="text-sm text-[var(--muted)]" data-testid="profile-google-password-note">
-              You sign in with Google, so you do not have a Learning AI Africa password. To add one, use “Forgotten your password?” on the log-in page.
+              You signed up with Google, which is no longer available, so you do not have a Learning AI Africa password yet. To add one, use “Forgotten your password?” on the log-in page.
             </p>
           )}
         </section>

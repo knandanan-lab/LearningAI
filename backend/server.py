@@ -11,7 +11,6 @@ import uuid
 import hashlib
 import secrets
 import logging
-import httpx
 from fastapi.responses import StreamingResponse
 import anthropic
 from datetime import datetime, timezone, timedelta
@@ -489,32 +488,6 @@ async def admin_feedback(_: dict = Depends(admin_user)):
     comments = [{"rating": FEEDBACK_LABELS[d["rating"]], "comment": d["comment"], "date": d["updated_at"][:10]}
                 for d in docs if d.get("comment")]
     return {"responses": len(docs), "counts": counts, "comments": comments[:100]}
-
-
-# ---------- Google sign-in (Emergent managed) ----------
-class GoogleIn(BaseModel):
-    session_id: str
-
-
-@api.post("/auth/google")
-async def google_login(body: GoogleIn, background: BackgroundTasks):
-    async with httpx.AsyncClient(timeout=15) as hc:
-        r = await hc.get("https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
-                         headers={"X-Session-ID": body.session_id})
-    if r.status_code != 200:
-        raise HTTPException(401, "Google sign-in failed. Please try again.")
-    data = r.json()
-    email = data["email"].lower()
-    user = await db.users.find_one({"email": email})
-    if not user:
-        doc = {"email": email, "password_hash": "", "first_name": (data.get("name") or "").split(" ")[0][:60],
-               "country": "", "work_function": "", "ai_experience": "", "role": "learner",
-               "auth_provider": "google", "email_verified": True, "created_at": datetime.now(timezone.utc).isoformat()}
-        res = await db.users.insert_one(doc)
-        doc["_id"] = res.inserted_id
-        user = doc
-        background.add_task(send_welcome, email, doc["first_name"])
-    return {"token": make_token(str(user["_id"]), user.get("token_version", 0)), "user": public_user(user)}
 
 
 # ---------- AI practice (Anthropic API) ----------

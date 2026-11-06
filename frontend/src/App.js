@@ -6,7 +6,6 @@ import Layout from "@/components/Layout";
 import Welcome from "@/pages/Welcome";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
-import AuthCallback from "@/pages/AuthCallback";
 import CompleteProfile from "@/pages/CompleteProfile";
 import Dashboard from "@/pages/Dashboard";
 import Pathway from "@/pages/Pathway";
@@ -49,8 +48,6 @@ function PublicOnly({ children }) {
 }
 
 function AppRouter() {
-  const location = useLocation();
-  if (location.hash?.includes("session_id=")) return <AuthCallback />;
   const P = (el, admin) => <Protected admin={admin}>{el}</Protected>;
   return (
     <Layout>

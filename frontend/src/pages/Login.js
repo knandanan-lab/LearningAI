@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api, errorText } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import GoogleButton from "@/components/GoogleButton";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -42,8 +41,6 @@ export default function Login() {
         <p className="text-sm text-right"><Link to="/forgot-password" className="text-[var(--green)] underline" data-testid="forgot-password-link">Forgotten your password?</Link></p>
         <button className="btn btn-primary w-full" disabled={busy} data-testid="login-submit-button">{busy ? "Logging in…" : "Log in"}</button>
       </form>
-      <div className="my-5 text-center text-xs text-[var(--muted)]">or</div>
-      <GoogleButton />
       <p className="mt-6 text-sm text-center">
         New to Learning AI Africa? <Link to="/register" className="text-[var(--green)] underline" data-testid="go-to-register-link">Create an account</Link>
       </p>

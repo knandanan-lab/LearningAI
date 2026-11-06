@@ -18,7 +18,6 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    if (window.location.hash?.includes("session_id=")) return setUser(false);
     refresh();
   }, [refresh]);
 

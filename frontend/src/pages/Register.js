@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { api, errorText } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import ProfileFields from "@/components/ProfileFields";
-import GoogleButton from "@/components/GoogleButton";
 
 export default function Register() {
   const [form, setForm] = useState({ email: "", password: "", first_name: "", country: "", work_function: "", ai_experience: "" });
@@ -30,9 +29,7 @@ export default function Register() {
     <div className="max-w-lg mx-auto fade-in">
       <h1 className="text-3xl sm:text-4xl font-bold text-[var(--green)]">Create your account</h1>
       <p className="mt-2 text-[var(--muted)]">It takes about a minute. No payment card needed.</p>
-      <div className="mt-6"><GoogleButton /></div>
-      <div className="my-5 text-center text-xs text-[var(--muted)]">or register with email</div>
-      <form onSubmit={submit} className="space-y-4" data-testid="register-form">
+      <form onSubmit={submit} className="mt-6 space-y-4" data-testid="register-form">
         <div>
           <label className="label" htmlFor="reg-email">Email</label>
           <input id="reg-email" type="email" required className="field" value={form.email} onChange={(e) => set("email", e.target.value)} data-testid="register-email-input" />
