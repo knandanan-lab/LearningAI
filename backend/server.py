@@ -49,13 +49,23 @@ def make_token(user_id: str, tv: int = 0) -> str:
     return jwt.encode(payload, os.environ["JWT_SECRET"], algorithm=JWT_ALG)
 
 
+def email_configured() -> bool:
+    return bool(os.environ.get("MAILTRAP_USERNAME"))
+
+
+def is_email_verified(u: dict) -> bool:
+    # Without email configured, users can't receive a confirmation link, so treat everyone as confirmed.
+    # Nothing is written to the database: once email is configured, each user's real status applies again.
+    return bool(u.get("email_verified")) or not email_configured()
+
+
 def public_user(u: dict) -> dict:
     return {
         "id": str(u["_id"]), "email": u["email"], "first_name": u.get("first_name", ""),
         "country": u.get("country", ""), "work_function": u.get("work_function", ""),
         "ai_experience": u.get("ai_experience", ""), "role": u.get("role", "learner"),
         "has_password": bool(u.get("password_hash")),
-        "email_verified": bool(u.get("email_verified")),
+        "email_verified": is_email_verified(u),
     }
 
 
@@ -255,7 +265,7 @@ async def verify_email(body: VerifyIn):
 
 @api.post("/auth/resend-verification")
 async def resend_verification(background: BackgroundTasks, user: dict = Depends(current_user)):
-    if user.get("email_verified"):
+    if is_email_verified(user):
         return {"message": "Your email address is already confirmed."}
     hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
     if await db.email_verify_tokens.count_documents({"user_id": str(user["_id"]), "created_at": {"$gt": hour_ago}}) >= 4:
@@ -524,7 +534,7 @@ async def check_ai_quota(user_id: str):
 
 @api.post("/ai/run")
 async def ai_run(body: AIIn, user: dict = Depends(current_user)):
-    if not user.get("email_verified"):
+    if not is_email_verified(user):
         raise HTTPException(403, "Please confirm your email address to use the in-app AI.")
     await check_ai_quota(str(user["_id"]))
     # All model choices ("claude", "gpt", "gemini") are now served by Claude; the field is kept
