@@ -4,16 +4,9 @@ import { streamAI } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import VerifyNotice from "@/components/VerifyNotice";
 
-const MODELS = [
-  ["gpt", "GPT 6 Luna"],
-  ["claude", "Claude Sonnet 5.5"],
-  ["gemini", "Gemini 3 Flash"],
-];
-
 export default function AIPanel({ id, prompt }) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
-  const [model, setModel] = useState("gpt");
   const [out, setOut] = useState("");
   const [mode, setMode] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -25,7 +18,7 @@ export default function AIPanel({ id, prompt }) {
     setError("");
     setBusy(true);
     try {
-      await streamAI({ prompt, model, mode: m }, (t) => setOut((o) => o + t));
+      await streamAI({ prompt, mode: m }, (t) => setOut((o) => o + t));
     } catch (e) {
       setError(e.message);
     } finally {
@@ -48,9 +41,6 @@ export default function AIPanel({ id, prompt }) {
         Your prompt is sent to an external AI provider. The app does not save it. Check every answer before using it.
       </p>
       <div className="flex flex-wrap items-center gap-2">
-        <select className="field !min-h-[40px] !w-auto text-sm" value={model} onChange={(e) => setModel(e.target.value)} data-testid={`ai-model-select-${id}`}>
-          {MODELS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-        </select>
         <button className="btn btn-accent btn-sm" disabled={busy} onClick={() => run("try")} data-testid={`ai-try-${id}`}>
           <Sparkles size={16} /> Try it
         </button>

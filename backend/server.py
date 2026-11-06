@@ -12,7 +12,7 @@ import secrets
 import logging
 import httpx
 from fastapi.responses import StreamingResponse
-from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
+import anthropic
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Literal
 
@@ -487,12 +487,10 @@ async def google_login(body: GoogleIn, background: BackgroundTasks):
     return {"token": make_token(str(user["_id"]), user.get("token_version", 0)), "user": public_user(user)}
 
 
-# ---------- AI practice (Emergent LLM key) ----------
-MODELS = {
-    "claude": ("anthropic", "claude-sonnet-5-5"),
-    "gpt": ("openai", "gpt-6-luna"),
-    "gemini": ("gemini", "gemini-3-flash-preview"),
-}
+# ---------- AI practice (Anthropic API) ----------
+# Reads ANTHROPIC_API_KEY from the environment. Async client so streaming doesn't block the event loop.
+claude_client = anthropic.AsyncAnthropic()
+CLAUDE_MODEL = "claude-sonnet-5-5"
 TRY_SYSTEM = ("You are a helpful workplace assistant for working professionals in Africa. Use clear British "
               "English. Be concise and practical. If the prompt contains placeholders in square brackets, make "
               "sensible fictional assumptions and say so in one line. Remind the user to check facts where relevant. "
@@ -529,19 +527,26 @@ async def ai_run(body: AIIn, user: dict = Depends(current_user)):
     if not user.get("email_verified"):
         raise HTTPException(403, "Please confirm your email address to use the in-app AI.")
     await check_ai_quota(str(user["_id"]))
-    provider, model = MODELS[body.model]
+    # All model choices ("claude", "gpt", "gemini") are now served by Claude; the field is kept
+    # so existing frontend requests remain valid.
     system = TRY_SYSTEM if body.mode == "try" else FEEDBACK_SYSTEM
     text = body.prompt if body.mode == "try" else f"Please give feedback on this prompt:\n\n{body.prompt}"
-    chat = LlmChat(api_key=os.environ["EMERGENT_LLM_KEY"], session_id=f"{user['_id']}-{uuid.uuid4().hex}",
-                   system_message=system).with_model(provider, model)
 
     async def events():
         try:
-            async for ev in chat.stream_message(UserMessage(text=text)):
-                if isinstance(ev, TextDelta):
-                    yield f"data: {json.dumps({'t': ev.content})}\n\n"
-                elif isinstance(ev, StreamDone):
-                    break
+            async with claude_client.beta.messages.stream(
+                model=CLAUDE_MODEL,
+                max_tokens=16000,
+                system=system,
+                messages=[{"role": "user", "content": text}],
+                betas=["server-side-fallback-2026-07-01"],
+                fallbacks="default",
+            ) as stream:
+                async for chunk in stream.text_stream:
+                    yield f"data: {json.dumps({'t': chunk})}\n\n"
+                final = await stream.get_final_message()
+            if final.stop_reason == "refusal":
+                yield f"data: {json.dumps({'error': 'The AI could not help with that request. Please try rephrasing it.'})}\n\n"
         except Exception:
             logging.exception("AI error")
             today = datetime.now(timezone.utc).date().isoformat()

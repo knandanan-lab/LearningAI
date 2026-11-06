@@ -1,17 +1,21 @@
 import os
 import re
+import asyncio
 import ipaddress
 import logging
+import smtplib
+from email.message import EmailMessage
+from email.utils import formataddr, make_msgid
 from html import escape
 from html.parser import HTMLParser
 from urllib.parse import urlparse
 
-import httpx
 from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
 
-EMAIL_BASE_URL = "https://integrations.emergentagent.com"
+DEFAULT_SMTP_HOST = "sandbox.smtp.mailtrap.io"
+SMTP_PORT = 587
 
 _SHORTENERS = ("bit.ly", "tinyurl.com", "t.co", "is.gd", "cutt.ly", "goo.gl", "rebrand.ly")
 _CRED_ASK = ("reply with your password", "reply with the code", "send your password", "cvv",
@@ -88,24 +92,37 @@ def _assert_safe_email(subject: str, html: str) -> None:
 
 async def send_email(*, to: str, subject: str, html: str) -> str | None:
     _assert_safe_email(subject, html)
-    payload = {"to": [to], "subject": subject, "html": html, "from_name": os.environ["EMAIL_FROM_NAME"]}
+    from_addr = os.environ["EMAIL_FROM_ADDRESS"]
+    msg = EmailMessage()
+    msg["From"] = formataddr((os.environ["EMAIL_FROM_NAME"], from_addr))
+    msg["To"] = to
+    msg["Subject"] = subject
+    msg["Message-ID"] = make_msgid(domain=from_addr.rsplit("@", 1)[-1])
     if os.environ.get("EMAIL_REPLY_TO"):
-        payload["contact_email"] = os.environ["EMAIL_REPLY_TO"]
+        msg["Reply-To"] = os.environ["EMAIL_REPLY_TO"]
+    msg.set_content("This email needs an HTML-capable email client to display.")
+    msg.add_alternative(html, subtype="html")
+
+    def _send():
+        host = os.environ.get("MAILTRAP_HOST") or DEFAULT_SMTP_HOST
+        with smtplib.SMTP(host, SMTP_PORT, timeout=30) as smtp:
+            smtp.starttls()
+            smtp.login(os.environ["MAILTRAP_USERNAME"], os.environ["MAILTRAP_PASSWORD"])
+            smtp.send_message(msg)
+
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(f"{EMAIL_BASE_URL}/api/v1/email/send",
-                                     headers={"X-Email-Key": os.environ["EMERGENT_EMAIL_KEY"]}, json=payload)
-        resp.raise_for_status()
-        return resp.json().get("id")
-    except httpx.HTTPStatusError as e:
-        try:
-            code = e.response.json().get("code", "")
-        except ValueError:
-            code = ""
-        if code in ("insufficient_credits", "integration_disabled", "daily_limit_reached"):
-            logger.warning(f"Email paused: {code} ({e.response.status_code}): {e.response.text}")
+        # smtplib is blocking; run it in a thread so it doesn't block the event loop.
+        await asyncio.to_thread(_send)
+        return msg["Message-ID"]
+    except smtplib.SMTPResponseException as e:
+        # 4xx SMTP codes are temporary (e.g. rate limits); 5xx are permanent failures.
+        if 400 <= e.smtp_code < 500:
+            logger.warning(f"Email paused: SMTP {e.smtp_code}: {e.smtp_error!r}")
             raise HTTPException(503, "Email is temporarily unavailable")
-        logger.error(f"Email send failed: {e.response.status_code} {e.response.text}")
+        logger.error(f"Email send failed: SMTP {e.smtp_code}: {e.smtp_error!r}")
+        raise HTTPException(502, "Failed to send email")
+    except (smtplib.SMTPException, OSError):
+        logger.exception("Email send failed")
         raise HTTPException(502, "Failed to send email")
 
 
