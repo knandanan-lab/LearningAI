@@ -16,6 +16,21 @@ function categoryStyle(cat) {
   return CATEGORY_COLORS[cat] ?? { bg: "var(--wash)", color: "var(--muted)" };
 }
 
+function formatDate(iso) {
+  if (!iso) return null;
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function CategoryTag({ cat }) {
+  const { bg, color } = categoryStyle(cat);
+  return (
+    <span className="inline-block text-xs font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full"
+      style={{ background: bg, color }}>
+      {cat}
+    </span>
+  );
+}
+
 export default function NewsInsights() {
   const [articles, setArticles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -62,12 +77,12 @@ export default function NewsInsights() {
         </div>
       </div>
 
-      {/* Featured card (first article, full width) */}
+      {/* Featured card */}
       <a
-        href={featured.url}
-        target="_blank"
+        href={featured.url || undefined}
+        target={featured.url ? "_blank" : undefined}
         rel="noopener noreferrer"
-        className="card card-link block overflow-hidden group"
+        className={`card block overflow-hidden group${featured.url ? " card-link" : ""}`}
         style={{ textDecoration: "none", color: "inherit" }}
       >
         <div className="grid md:grid-cols-[1fr_1.1fr] gap-0">
@@ -92,9 +107,11 @@ export default function NewsInsights() {
               {featured.title}
             </h3>
             <p className="text-sm text-[var(--muted)] leading-relaxed line-clamp-3">{featured.excerpt}</p>
-            <span className="inline-flex items-center gap-1 text-sm font-medium text-[var(--sky)] mt-1">
-              Read article <ArrowUpRight size={15} />
-            </span>
+            {featured.url && (
+              <span className="inline-flex items-center gap-1 text-sm font-medium text-[var(--sky)] mt-1">
+                Read article <ArrowUpRight size={15} />
+              </span>
+            )}
           </div>
         </div>
       </a>
@@ -114,10 +131,10 @@ export default function NewsInsights() {
 function ArticleCard({ article }) {
   return (
     <a
-      href={article.url}
-      target="_blank"
+      href={article.url || undefined}
+      target={article.url ? "_blank" : undefined}
       rel="noopener noreferrer"
-      className="card card-link flex flex-col overflow-hidden group"
+      className={`card flex flex-col overflow-hidden group${article.url ? " card-link" : ""}`}
       style={{ textDecoration: "none", color: "inherit" }}
     >
       <div className="relative overflow-hidden" style={{ height: 160 }}>
@@ -139,25 +156,12 @@ function ArticleCard({ article }) {
           {article.title}
         </h3>
         <p className="text-sm text-[var(--muted)] leading-relaxed line-clamp-3 flex-1">{article.excerpt}</p>
-        <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--sky)] mt-1 self-start">
-          Read more <ArrowUpRight size={13} />
-        </span>
+        {article.url && (
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--sky)] mt-1 self-start">
+            Read more <ArrowUpRight size={13} />
+          </span>
+        )}
       </div>
     </a>
-  );
-}
-
-function formatDate(iso) {
-  if (!iso) return null;
-  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
-
-function CategoryTag({ cat }) {
-  const { bg, color } = categoryStyle(cat);
-  return (
-    <span className="inline-block text-xs font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full"
-      style={{ background: bg, color }}>
-      {cat}
-    </span>
   );
 }
