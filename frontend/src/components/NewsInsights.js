@@ -3,6 +3,13 @@ import { ArrowUpRight, Newspaper } from "lucide-react";
 import { api } from "../lib/api";
 
 const PLACEHOLDER_IMG = "https://images.unsplash.com/photo-1677442135703-1787eea5ce01?auto=format&fit=crop&w=600&q=60";
+const BACKEND = process.env.REACT_APP_BACKEND_URL || "";
+
+function resolveImage(url) {
+  if (!url) return "";
+  if (url.startsWith("/uploads/")) return `${BACKEND}${url}`;
+  return url;
+}
 
 const CATEGORY_COLORS = {
   "Productivity": { bg: "var(--sky-soft)", color: "var(--sky)" },
@@ -19,16 +26,6 @@ function categoryStyle(cat) {
 function formatDate(iso) {
   if (!iso) return null;
   return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
-
-function CategoryTag({ cat }) {
-  const { bg, color } = categoryStyle(cat);
-  return (
-    <span className="inline-block text-xs font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full"
-      style={{ background: bg, color }}>
-      {cat}
-    </span>
-  );
 }
 
 export default function NewsInsights() {
@@ -77,7 +74,7 @@ export default function NewsInsights() {
         </div>
       </div>
 
-      {/* Featured card */}
+      {/* Featured card (first article, full width) */}
       <a
         href={featured.url || undefined}
         target={featured.url ? "_blank" : undefined}
@@ -88,7 +85,7 @@ export default function NewsInsights() {
         <div className="grid md:grid-cols-[1fr_1.1fr] gap-0">
           <div className="relative overflow-hidden" style={{ minHeight: 220 }}>
             <img
-              src={featured.image_url || PLACEHOLDER_IMG}
+              src={resolveImage(featured.image_url) || PLACEHOLDER_IMG}
               alt=""
               className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
               style={{ position: "absolute", inset: 0, minHeight: 220 }}
@@ -116,9 +113,9 @@ export default function NewsInsights() {
         </div>
       </a>
 
-      {/* Grid of remaining articles */}
+      {/* Grid of remaining articles — 2 cols so a single card fills half, not the full width */}
       {rest.length > 0 && (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {rest.map(article => (
             <ArticleCard key={article.id} article={article} />
           ))}
@@ -139,7 +136,7 @@ function ArticleCard({ article }) {
     >
       <div className="relative overflow-hidden" style={{ height: 160 }}>
         <img
-          src={article.image_url || PLACEHOLDER_IMG}
+          src={resolveImage(article.image_url) || PLACEHOLDER_IMG}
           alt=""
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           onError={e => { e.target.src = PLACEHOLDER_IMG; }}
@@ -163,5 +160,15 @@ function ArticleCard({ article }) {
         )}
       </div>
     </a>
+  );
+}
+
+function CategoryTag({ cat }) {
+  const { bg, color } = categoryStyle(cat);
+  return (
+    <span className="inline-block text-xs font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full"
+      style={{ background: bg, color }}>
+      {cat}
+    </span>
   );
 }
