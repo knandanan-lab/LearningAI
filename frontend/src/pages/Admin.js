@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { KeyRound, Pencil } from "lucide-react";
+import { KeyRound, Pencil, Newspaper } from "lucide-react";
 import { api } from "@/lib/api";
 import { categoryName } from "@/lib/constants";
 import AdminResetLink from "@/components/AdminResetLink";
@@ -24,7 +24,10 @@ export default function Admin() {
           <p className="eyebrow">Administration</p>
           <h1 className="mt-2 text-3xl sm:text-4xl font-bold text-[var(--green)]">Content and usage</h1>
         </div>
-        <Link to="/admin/password" className="btn btn-ghost btn-sm" data-testid="admin-change-password-link"><KeyRound size={14} /> Change my password</Link>
+        <div className="flex gap-2 flex-wrap">
+          <Link to="/admin/news" className="btn btn-accent btn-sm"><Newspaper size={14} /> Manage news</Link>
+          <Link to="/admin/password" className="btn btn-ghost btn-sm" data-testid="admin-change-password-link"><KeyRound size={14} /> Change my password</Link>
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-3 max-w-md">
         <div className="card p-5"><p className="text-sm text-[var(--muted)]">Registered learners</p><p className="text-3xl font-display font-bold" data-testid="admin-stat-users">{stats.registered_users}</p></div>
