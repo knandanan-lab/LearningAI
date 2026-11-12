@@ -3,6 +3,7 @@ import { LogOut } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import BootcampPopup from "./BootcampPopup";
 
+
 const NAV = [
   ["/dashboard", "Home"],
   ["/pathway", "Pathway"],
