@@ -1,6 +1,7 @@
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { LogOut } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import BootcampPopup from "./BootcampPopup";
 
 const NAV = [
   ["/dashboard", "Home"],
@@ -77,6 +78,9 @@ export default function Layout({ children }) {
           </span>
         </div>
       </footer>
+
+      {/* Bootcamp promotion popup */}
+      <BootcampPopup />
     </div>
   );
 }
