@@ -82,7 +82,12 @@ export default function NewsInsights() {
             <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, rgba(0,0,0,0.08), transparent)" }} />
           </div>
           <div className="p-6 sm:p-8 flex flex-col justify-center gap-3">
-            <CategoryTag cat={featured.category} />
+            <div className="flex items-center gap-2 flex-wrap">
+              <CategoryTag cat={featured.category} />
+              {featured.published_at && (
+                <span className="text-xs text-[var(--muted)]">{formatDate(featured.published_at)}</span>
+              )}
+            </div>
             <h3 className="text-xl font-bold text-[var(--green)] leading-snug group-hover:text-[var(--sky)] transition-colors">
               {featured.title}
             </h3>
@@ -124,7 +129,12 @@ function ArticleCard({ article }) {
         />
       </div>
       <div className="p-5 flex flex-col gap-2 flex-1">
-        <CategoryTag cat={article.category} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <CategoryTag cat={article.category} />
+          {article.published_at && (
+            <span className="text-xs text-[var(--muted)]">{formatDate(article.published_at)}</span>
+          )}
+        </div>
         <h3 className="font-semibold text-[var(--green)] leading-snug text-base group-hover:text-[var(--sky)] transition-colors line-clamp-2">
           {article.title}
         </h3>
@@ -135,6 +145,11 @@ function ArticleCard({ article }) {
       </div>
     </a>
   );
+}
+
+function formatDate(iso) {
+  if (!iso) return null;
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
 function CategoryTag({ cat }) {
