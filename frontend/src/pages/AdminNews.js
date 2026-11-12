@@ -250,9 +250,10 @@ export default function AdminNews() {
               {/* URL fallback */}
               <input
                 className="field"
-                type="url"
-                placeholder="https://images.unsplash.com/…"
+                type="text"
+                placeholder="https://images.unsplash.com/… or upload above"
                 value={form.image_url}
+
                 onChange={e => setForm(f => ({ ...f, image_url: e.target.value }))}
               />
               <p className="text-xs text-[var(--muted)] mt-1">
