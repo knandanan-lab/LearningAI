@@ -6,6 +6,7 @@ import Layout from "@/components/Layout";
 import Welcome from "@/pages/Welcome";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
+import AuthCallback from "@/pages/AuthCallback";
 import CompleteProfile from "@/pages/CompleteProfile";
 import Dashboard from "@/pages/Dashboard";
 import Pathway from "@/pages/Pathway";
@@ -18,6 +19,7 @@ import Guidance from "@/pages/Guidance";
 import Admin from "@/pages/Admin";
 import AdminLessonEdit from "@/pages/AdminLessonEdit";
 import AdminPassword from "@/pages/AdminPassword";
+import AdminNews from "@/pages/AdminNews";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
 import VerifyEmail from "@/pages/VerifyEmail";
@@ -48,6 +50,8 @@ function PublicOnly({ children }) {
 }
 
 function AppRouter() {
+  const location = useLocation();
+  if (location.hash?.includes("session_id=")) return <AuthCallback />;
   const P = (el, admin) => <Protected admin={admin}>{el}</Protected>;
   return (
     <Layout>
@@ -70,6 +74,7 @@ function AppRouter() {
         <Route path="/profile" element={P(<Profile />)} />
         <Route path="/admin" element={P(<Admin />, true)} />
         <Route path="/admin/lessons/:id" element={P(<AdminLessonEdit />, true)} />
+        <Route path="/admin/news" element={P(<AdminNews />, true)} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>
