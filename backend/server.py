@@ -6,13 +6,13 @@ load_dotenv(ROOT_DIR / '.env')
 
 import os
 import json
+import asyncio
 import uuid
 import hashlib
 import secrets
 import logging
-import httpx
 from fastapi.responses import StreamingResponse
-from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
+import anthropic
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Literal
 
@@ -27,8 +27,27 @@ from starlette.middleware.cors import CORSMiddleware
 from lessons_seed import CATEGORIES, build_lessons
 from emailer import send_email, reset_email_html, welcome_email_html, verify_email_html
 
-client = AsyncIOMotorClient(os.environ['MONGO_URL'])
-db = client[os.environ['DB_NAME']]
+# MongoDB is connected lazily: the client is only created when a request first touches the database,
+# so a missing or unreachable MongoDB doesn't stop the app from starting.
+_mongo_client: Optional[AsyncIOMotorClient] = None
+
+
+def get_db():
+    global _mongo_client
+    if _mongo_client is None:
+        # Fail fast (5s instead of Motor's default 30s) so requests don't hang while MongoDB is down.
+        _mongo_client = AsyncIOMotorClient(os.environ['MONGO_URL'], serverSelectionTimeoutMS=5000)
+    return _mongo_client[os.environ['DB_NAME']]
+
+
+class _LazyDB:
+    """Stands in for the Motor database so existing `db.<collection>` code works unchanged."""
+
+    def __getattr__(self, name):
+        return getattr(get_db(), name)
+
+
+db = _LazyDB()
 
 app = FastAPI()
 api = APIRouter(prefix="/api")
@@ -49,13 +68,23 @@ def make_token(user_id: str, tv: int = 0) -> str:
     return jwt.encode(payload, os.environ["JWT_SECRET"], algorithm=JWT_ALG)
 
 
+def email_configured() -> bool:
+    return bool(os.environ.get("MAILTRAP_USERNAME"))
+
+
+def is_email_verified(u: dict) -> bool:
+    # Without email configured, users can't receive a confirmation link, so treat everyone as confirmed.
+    # Nothing is written to the database: once email is configured, each user's real status applies again.
+    return bool(u.get("email_verified")) or not email_configured()
+
+
 def public_user(u: dict) -> dict:
     return {
         "id": str(u["_id"]), "email": u["email"], "first_name": u.get("first_name", ""),
         "country": u.get("country", ""), "work_function": u.get("work_function", ""),
         "ai_experience": u.get("ai_experience", ""), "role": u.get("role", "learner"),
         "has_password": bool(u.get("password_hash")),
-        "email_verified": bool(u.get("email_verified")),
+        "email_verified": is_email_verified(u),
     }
 
 
@@ -255,7 +284,7 @@ async def verify_email(body: VerifyIn):
 
 @api.post("/auth/resend-verification")
 async def resend_verification(background: BackgroundTasks, user: dict = Depends(current_user)):
-    if user.get("email_verified"):
+    if is_email_verified(user):
         return {"message": "Your email address is already confirmed."}
     hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
     if await db.email_verify_tokens.count_documents({"user_id": str(user["_id"]), "created_at": {"$gt": hour_ago}}) >= 4:
@@ -512,38 +541,10 @@ async def admin_delete_news(article_id: str, _: dict = Depends(admin_user)):
     return {"ok": True}
 
 
-# ---------- Google sign-in (Emergent managed) ----------
-class GoogleIn(BaseModel):
-    session_id: str
-
-
-@api.post("/auth/google")
-async def google_login(body: GoogleIn, background: BackgroundTasks):
-    async with httpx.AsyncClient(timeout=15) as hc:
-        r = await hc.get("https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
-                         headers={"X-Session-ID": body.session_id})
-    if r.status_code != 200:
-        raise HTTPException(401, "Google sign-in failed. Please try again.")
-    data = r.json()
-    email = data["email"].lower()
-    user = await db.users.find_one({"email": email})
-    if not user:
-        doc = {"email": email, "password_hash": "", "first_name": (data.get("name") or "").split(" ")[0][:60],
-               "country": "", "work_function": "", "ai_experience": "", "role": "learner",
-               "auth_provider": "google", "email_verified": True, "created_at": datetime.now(timezone.utc).isoformat()}
-        res = await db.users.insert_one(doc)
-        doc["_id"] = res.inserted_id
-        user = doc
-        background.add_task(send_welcome, email, doc["first_name"])
-    return {"token": make_token(str(user["_id"]), user.get("token_version", 0)), "user": public_user(user)}
-
-
-# ---------- AI practice (Emergent LLM key) ----------
-MODELS = {
-    "claude": ("anthropic", "claude-sonnet-5-5"),
-    "gpt": ("openai", "gpt-6-luna"),
-    "gemini": ("gemini", "gemini-3-flash-preview"),
-}
+# ---------- AI practice (Anthropic API) ----------
+# Reads ANTHROPIC_API_KEY from the environment. Async client so streaming doesn't block the event loop.
+claude_client = anthropic.AsyncAnthropic()
+CLAUDE_MODEL = "claude-sonnet-5-5"
 TRY_SYSTEM = ("You are a helpful workplace assistant for working professionals in Africa. Use clear British "
               "English. Be concise and practical. If the prompt contains placeholders in square brackets, make "
               "sensible fictional assumptions and say so in one line. Remind the user to check facts where relevant. "
@@ -577,22 +578,29 @@ async def check_ai_quota(user_id: str):
 
 @api.post("/ai/run")
 async def ai_run(body: AIIn, user: dict = Depends(current_user)):
-    if not user.get("email_verified"):
+    if not is_email_verified(user):
         raise HTTPException(403, "Please confirm your email address to use the in-app AI.")
     await check_ai_quota(str(user["_id"]))
-    provider, model = MODELS[body.model]
+    # All model choices ("claude", "gpt", "gemini") are now served by Claude; the field is kept
+    # so existing frontend requests remain valid.
     system = TRY_SYSTEM if body.mode == "try" else FEEDBACK_SYSTEM
     text = body.prompt if body.mode == "try" else f"Please give feedback on this prompt:\n\n{body.prompt}"
-    chat = LlmChat(api_key=os.environ["EMERGENT_LLM_KEY"], session_id=f"{user['_id']}-{uuid.uuid4().hex}",
-                   system_message=system).with_model(provider, model)
 
     async def events():
         try:
-            async for ev in chat.stream_message(UserMessage(text=text)):
-                if isinstance(ev, TextDelta):
-                    yield f"data: {json.dumps({'t': ev.content})}\n\n"
-                elif isinstance(ev, StreamDone):
-                    break
+            async with claude_client.beta.messages.stream(
+                model=CLAUDE_MODEL,
+                max_tokens=16000,
+                system=system,
+                messages=[{"role": "user", "content": text}],
+                betas=["server-side-fallback-2026-07-01"],
+                fallbacks="default",
+            ) as stream:
+                async for chunk in stream.text_stream:
+                    yield f"data: {json.dumps({'t': chunk})}\n\n"
+                final = await stream.get_final_message()
+            if final.stop_reason == "refusal":
+                yield f"data: {json.dumps({'error': 'The AI could not help with that request. Please try rephrasing it.'})}\n\n"
         except Exception:
             logging.exception("AI error")
             today = datetime.now(timezone.utc).date().isoformat()
@@ -618,8 +626,27 @@ app.add_middleware(
 logging.basicConfig(level=logging.INFO)
 
 
-@app.on_event("startup")
-async def startup():
+_db_ready = False
+_db_init_lock = asyncio.Lock()
+
+
+@app.middleware("http")
+async def init_db_on_first_request(request: Request, call_next):
+    # Set up indexes and seed data on the first request instead of at startup. If MongoDB is
+    # unreachable, log it and let the request continue; the next request will try again.
+    global _db_ready
+    if not _db_ready:
+        async with _db_init_lock:
+            if not _db_ready:
+                try:
+                    await init_db()
+                    _db_ready = True
+                except Exception:
+                    logging.exception("MongoDB initialisation failed; will retry on the next request")
+    return await call_next(request)
+
+
+async def init_db():
     await db.users.create_index("email", unique=True)
     await db.progress.create_index([("user_id", 1), ("lesson_id", 1)], unique=True)
     await db.favourites.create_index([("user_id", 1), ("lesson_id", 1)], unique=True)
@@ -645,4 +672,5 @@ async def startup():
 
 @app.on_event("shutdown")
 async def shutdown():
-    client.close()
+    if _mongo_client is not None:
+        _mongo_client.close()
