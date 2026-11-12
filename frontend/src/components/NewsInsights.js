@@ -41,17 +41,21 @@ export default function NewsInsights() {
 
   if (loading) return (
     <section className="space-y-5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-[var(--green)]">AI News &amp; Insights</h2>
+      <div className="flex items-center gap-3">
+        <span className="icon-chip chip-sky"><Newspaper size={20} /></span>
+        <div>
+          <p className="eyebrow">Stay current</p>
+          <h2 className="text-2xl font-bold text-[var(--green)] leading-tight">AI News &amp; Insights</h2>
+        </div>
       </div>
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {[1, 2, 3].map(i => (
-          <div key={i} className="card animate-pulse" style={{ height: 300 }}>
-            <div style={{ height: 160, background: "var(--wash)", borderRadius: "18px 18px 0 0" }} />
+          <div key={i} className="card animate-pulse" style={{ height: 340 }}>
+            <div style={{ height: 180, background: "var(--wash)", borderRadius: "18px 18px 0 0" }} />
             <div className="p-5 space-y-2">
-              <div style={{ height: 16, width: "30%", background: "var(--line)", borderRadius: 6 }} />
-              <div style={{ height: 20, width: "80%", background: "var(--line)", borderRadius: 6 }} />
-              <div style={{ height: 14, width: "100%", background: "var(--line)", borderRadius: 6 }} />
+              <div style={{ height: 14, width: "40%", background: "var(--line)", borderRadius: 6 }} />
+              <div style={{ height: 18, width: "85%", background: "var(--line)", borderRadius: 6 }} />
+              <div style={{ height: 13, width: "100%", background: "var(--line)", borderRadius: 6 }} />
             </div>
           </div>
         ))}
@@ -60,8 +64,6 @@ export default function NewsInsights() {
   );
 
   if (articles.length === 0) return null;
-
-  const [featured, ...rest] = articles;
 
   return (
     <section className="space-y-6" data-testid="news-insights">
@@ -74,53 +76,12 @@ export default function NewsInsights() {
         </div>
       </div>
 
-      {/* Featured card (first article, full width) */}
-      <a
-        href={featured.url || undefined}
-        target={featured.url ? "_blank" : undefined}
-        rel="noopener noreferrer"
-        className={`card block overflow-hidden group${featured.url ? " card-link" : ""}`}
-        style={{ textDecoration: "none", color: "inherit" }}
-      >
-        <div className="grid md:grid-cols-[1fr_1.1fr] gap-0">
-          <div className="relative overflow-hidden" style={{ minHeight: 220 }}>
-            <img
-              src={resolveImage(featured.image_url) || PLACEHOLDER_IMG}
-              alt=""
-              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-              style={{ position: "absolute", inset: 0, minHeight: 220 }}
-              onError={e => { e.target.src = PLACEHOLDER_IMG; }}
-            />
-            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, rgba(0,0,0,0.08), transparent)" }} />
-          </div>
-          <div className="p-6 sm:p-8 flex flex-col justify-center gap-3">
-            <div className="flex items-center gap-2 flex-wrap">
-              <CategoryTag cat={featured.category} />
-              {featured.published_at && (
-                <span className="text-xs text-[var(--muted)]">{formatDate(featured.published_at)}</span>
-              )}
-            </div>
-            <h3 className="text-xl font-bold text-[var(--green)] leading-snug group-hover:text-[var(--sky)] transition-colors">
-              {featured.title}
-            </h3>
-            <p className="text-sm text-[var(--muted)] leading-relaxed line-clamp-3">{featured.excerpt}</p>
-            {featured.url && (
-              <span className="inline-flex items-center gap-1 text-sm font-medium text-[var(--sky)] mt-1">
-                Read article <ArrowUpRight size={15} />
-              </span>
-            )}
-          </div>
-        </div>
-      </a>
-
-      {/* Grid of remaining articles — 2 cols so a single card fills half, not the full width */}
-      {rest.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {rest.map(article => (
-            <ArticleCard key={article.id} article={article} />
-          ))}
-        </div>
-      )}
+      {/* Equal 3-column grid — all articles the same size */}
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {articles.map(article => (
+          <ArticleCard key={article.id} article={article} />
+        ))}
+      </div>
     </section>
   );
 }
@@ -134,7 +95,8 @@ function ArticleCard({ article }) {
       className={`card flex flex-col overflow-hidden group${article.url ? " card-link" : ""}`}
       style={{ textDecoration: "none", color: "inherit" }}
     >
-      <div className="relative overflow-hidden" style={{ height: 160 }}>
+      {/* Image */}
+      <div className="relative overflow-hidden" style={{ height: 180 }}>
         <img
           src={resolveImage(article.image_url) || PLACEHOLDER_IMG}
           alt=""
@@ -142,20 +104,26 @@ function ArticleCard({ article }) {
           onError={e => { e.target.src = PLACEHOLDER_IMG; }}
         />
       </div>
+
+      {/* Content */}
       <div className="p-5 flex flex-col gap-2 flex-1">
+        {/* Date + Category row */}
         <div className="flex items-center gap-2 flex-wrap">
-          <CategoryTag cat={article.category} />
           {article.published_at && (
             <span className="text-xs text-[var(--muted)]">{formatDate(article.published_at)}</span>
           )}
+          <CategoryTag cat={article.category} />
         </div>
-        <h3 className="font-semibold text-[var(--green)] leading-snug text-base group-hover:text-[var(--sky)] transition-colors line-clamp-2">
+
+        {/* Title */}
+        <h3 className="font-bold text-[var(--green)] leading-snug text-base group-hover:text-[var(--sky)] transition-colors line-clamp-3 flex-1">
           {article.title}
         </h3>
-        <p className="text-sm text-[var(--muted)] leading-relaxed line-clamp-3 flex-1">{article.excerpt}</p>
+
+        {/* Read more */}
         {article.url && (
-          <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--sky)] mt-1 self-start">
-            Read more <ArrowUpRight size={13} />
+          <span className="inline-flex items-center gap-1 text-sm font-medium text-[var(--sky)] mt-1 self-start">
+            Read more <ArrowUpRight size={14} />
           </span>
         )}
       </div>
