@@ -50,6 +50,9 @@ class _LazyDB:
 
 db = _LazyDB()
 
+UPLOADS_DIR = ROOT_DIR / "uploads"
+UPLOADS_DIR.mkdir(exist_ok=True)
+
 app = FastAPI()
 api = APIRouter(prefix="/api")
 JWT_ALG = "HS256"
@@ -515,10 +518,12 @@ async def admin_list_news(_: dict = Depends(admin_user)):
 
 @api.post("/admin/news")
 async def admin_create_news(body: NewsArticleIn, _: dict = Depends(admin_user)):
+    now = datetime.now(timezone.utc).isoformat()
     doc = body.model_dump()
     doc["id"] = str(uuid.uuid4())
-    doc["created_at"] = datetime.now(timezone.utc).isoformat()
-    doc["updated_at"] = doc["created_at"]
+    doc["created_at"] = now
+    doc["updated_at"] = now
+    doc["published_at"] = now if body.published else None
     await db.news.insert_one(doc)
     doc.pop("_id", None)
     return doc
@@ -526,11 +531,20 @@ async def admin_create_news(body: NewsArticleIn, _: dict = Depends(admin_user)):
 
 @api.put("/admin/news/{article_id}")
 async def admin_update_news(article_id: str, body: NewsArticleIn, _: dict = Depends(admin_user)):
-    update = body.model_dump()
-    update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    res = await db.news.update_one({"id": article_id}, {"$set": update})
-    if res.matched_count == 0:
+    existing = await db.news.find_one({"id": article_id})
+    if not existing:
         raise HTTPException(404, "Article not found")
+    now = datetime.now(timezone.utc).isoformat()
+    update = body.model_dump()
+    update["updated_at"] = now
+    # Set published_at when first publishing; keep existing value if already set
+    if body.published and not existing.get("published_at"):
+        update["published_at"] = now
+    elif not body.published:
+        update["published_at"] = None
+    else:
+        update["published_at"] = existing.get("published_at")
+    await db.news.update_one({"id": article_id}, {"$set": update})
     return await db.news.find_one({"id": article_id}, {"_id": 0})
 
 
@@ -540,6 +554,22 @@ async def admin_delete_news(article_id: str, _: dict = Depends(admin_user)):
     if res.deleted_count == 0:
         raise HTTPException(404, "Article not found")
     return {"ok": True}
+
+
+# ---------- Image upload ----------
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+
+
+@api.post("/admin/upload-image")
+async def upload_image(file: UploadFile = File(...), _: dict = Depends(admin_user)):
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(400, "Only JPEG, PNG, GIF and WebP images are accepted")
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "jpg"
+    filename = f"{uuid.uuid4()}.{ext}"
+    dest = UPLOADS_DIR / filename
+    contents = await file.read()
+    dest.write_bytes(contents)
+    return {"url": f"/uploads/{filename}"}
 
 
 # ---------- AI practice (Anthropic API) ----------
@@ -615,6 +645,7 @@ async def ai_run(body: AIIn, user: dict = Depends(current_user)):
 
 
 app.include_router(api)
+app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,
