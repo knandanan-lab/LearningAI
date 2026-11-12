@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { ArrowUpRight, Newspaper } from "lucide-react";
+import { ArrowUpRight, Newspaper, ChevronLeft, ChevronRight } from "lucide-react";
 import { api } from "../lib/api";
 
 const PLACEHOLDER_IMG = "https://images.unsplash.com/photo-1677442135703-1787eea5ce01?auto=format&fit=crop&w=600&q=60";
 const BACKEND = process.env.REACT_APP_BACKEND_URL || "";
+const PAGE_SIZE = 3;
 
 function resolveImage(url) {
   if (!url) return "";
@@ -31,6 +32,7 @@ function formatDate(iso) {
 export default function NewsInsights() {
   const [articles, setArticles] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     api.get("/news")
@@ -65,23 +67,77 @@ export default function NewsInsights() {
 
   if (articles.length === 0) return null;
 
+  const totalPages = Math.ceil(articles.length / PAGE_SIZE);
+  const visible = articles.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+  const canPrev = page > 0;
+  const canNext = page < totalPages - 1;
+
   return (
     <section className="space-y-6" data-testid="news-insights">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <span className="icon-chip chip-sky"><Newspaper size={20} /></span>
-        <div>
-          <p className="eyebrow">Stay current</p>
-          <h2 className="text-2xl font-bold text-[var(--green)] leading-tight">AI News &amp; Insights</h2>
+      {/* Header with arrows */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="icon-chip chip-sky"><Newspaper size={20} /></span>
+          <div>
+            <p className="eyebrow">Stay current</p>
+            <h2 className="text-2xl font-bold text-[var(--green)] leading-tight">AI News &amp; Insights</h2>
+          </div>
         </div>
+
+        {/* Arrows — only show if more than one page */}
+        {totalPages > 1 && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-[var(--muted)]">{page + 1} / {totalPages}</span>
+            <button
+              onClick={() => setPage(p => p - 1)}
+              disabled={!canPrev}
+              className="btn btn-ghost btn-sm p-2 rounded-full"
+              style={{ opacity: canPrev ? 1 : 0.35 }}
+              aria-label="Previous articles"
+            >
+              <ChevronLeft size={20} />
+            </button>
+            <button
+              onClick={() => setPage(p => p + 1)}
+              disabled={!canNext}
+              className="btn btn-ghost btn-sm p-2 rounded-full"
+              style={{ opacity: canNext ? 1 : 0.35 }}
+              aria-label="Next articles"
+            >
+              <ChevronRight size={20} />
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Equal 3-column grid — all articles the same size */}
+      {/* Grid */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {articles.map(article => (
+        {visible.map(article => (
           <ArticleCard key={article.id} article={article} />
         ))}
       </div>
+
+      {/* Dot indicators */}
+      {totalPages > 1 && (
+        <div className="flex justify-center gap-2 pt-1">
+          {Array.from({ length: totalPages }).map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setPage(i)}
+              className="rounded-full transition-all"
+              style={{
+                width: i === page ? 20 : 8,
+                height: 8,
+                background: i === page ? "var(--sky)" : "var(--line)",
+                border: "none",
+                cursor: "pointer",
+                padding: 0,
+              }}
+              aria-label={`Go to page ${i + 1}`}
+            />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -95,7 +151,6 @@ function ArticleCard({ article }) {
       className={`card flex flex-col overflow-hidden group${article.url ? " card-link" : ""}`}
       style={{ textDecoration: "none", color: "inherit" }}
     >
-      {/* Image */}
       <div className="relative overflow-hidden" style={{ height: 180 }}>
         <img
           src={resolveImage(article.image_url) || PLACEHOLDER_IMG}
@@ -104,23 +159,16 @@ function ArticleCard({ article }) {
           onError={e => { e.target.src = PLACEHOLDER_IMG; }}
         />
       </div>
-
-      {/* Content */}
       <div className="p-5 flex flex-col gap-2 flex-1">
-        {/* Date + Category row */}
         <div className="flex items-center gap-2 flex-wrap">
           {article.published_at && (
             <span className="text-xs text-[var(--muted)]">{formatDate(article.published_at)}</span>
           )}
           <CategoryTag cat={article.category} />
         </div>
-
-        {/* Title */}
         <h3 className="font-bold text-[var(--green)] leading-snug text-base group-hover:text-[var(--sky)] transition-colors line-clamp-3 flex-1">
           {article.title}
         </h3>
-
-        {/* Read more */}
         {article.url && (
           <span className="inline-flex items-center gap-1 text-sm font-medium text-[var(--sky)] mt-1 self-start">
             Read more <ArrowUpRight size={14} />
