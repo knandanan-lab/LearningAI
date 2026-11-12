@@ -1,6 +1,12 @@
 import axios from "axios";
 
 export const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+export const BACKEND = process.env.REACT_APP_BACKEND_URL || "";
+export function resolveImage(url) {
+  if (!url) return "";
+  if (url.startsWith("/uploads/")) return `${BACKEND}${url}`;
+  return url;
+}
 const TOKEN_KEY = "ai15_token";
 
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
