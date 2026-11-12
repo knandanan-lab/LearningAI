@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { Clock, Briefcase, ShieldCheck } from "lucide-react";
+import NewsInsights from "../components/NewsInsights";
 
 const HERO_IMG =
   "https://images.unsplash.com/photo-1604933762021-54a5858c9832?auto=format&fit=crop&w=900&q=70";
@@ -49,6 +50,8 @@ export default function Welcome() {
           </div>
         ))}
       </section>
+
+      <NewsInsights />
 
       <section className="rounded-2xl bg-[var(--orange-soft)] border-l-4 border-[var(--orange)] p-6 sm:p-8 max-w-3xl" data-testid="welcome-responsibility-note">
         <h2 className="text-lg font-semibold text-[var(--green)]">You stay responsible for the result</h2>
