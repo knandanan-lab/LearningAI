@@ -19,7 +19,8 @@ from typing import List, Optional, Literal
 import bcrypt
 import jwt
 from bson import ObjectId
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, BackgroundTasks
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, BackgroundTasks, UploadFile, File
+from fastapi.staticfiles import StaticFiles
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field
 from starlette.middleware.cors import CORSMiddleware
@@ -495,7 +496,7 @@ class NewsArticleIn(BaseModel):
     title: str = Field(min_length=3, max_length=200)
     category: str = Field(min_length=2, max_length=60)
     excerpt: str = Field(min_length=10, max_length=400)
-    url: str = Field(min_length=5, max_length=500)
+    url: str = Field(default="", max_length=500)
     image_url: str = Field(default="", max_length=500)
     published: bool = Field(default=True)
 
