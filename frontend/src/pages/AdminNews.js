@@ -16,7 +16,7 @@ export default function AdminNews() {
   const [articles, setArticles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState(null); // article id being edited
+  const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -46,7 +46,7 @@ export default function AdminNews() {
       title: article.title,
       category: article.category,
       excerpt: article.excerpt,
-      url: article.url,
+      url: article.url || "",
       image_url: article.image_url || "",
       published: article.published,
     });
@@ -58,6 +58,27 @@ export default function AdminNews() {
     setShowForm(false);
     setEditing(null);
     setError("");
+  }
+
+  async function handleImageUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    setError("");
+    try {
+      const data = new FormData();
+      data.append("file", file);
+      const res = await api.post("/admin/upload-image", data, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setForm(f => ({ ...f, image_url: res.data.url }));
+    } catch (err) {
+      setError("Image upload failed: " + errorText(err));
+    } finally {
+      setUploading(false);
+      // reset so the same file can be re-selected
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   }
 
   async function handleSave(e) {
@@ -198,29 +219,72 @@ export default function AdminNews() {
               />
             </div>
 
-            {/* Image URL */}
+            {/* Cover image — upload OR paste URL */}
             <div>
-              <label className="label">Cover image URL <span className="font-normal text-[var(--muted)]">(optional)</span></label>
+              <label className="label">Cover image <span className="font-normal text-[var(--muted)]">(optional)</span></label>
+
+              {/* Upload button */}
+              <div className="flex items-center gap-3 mb-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="btn btn-ghost btn-sm"
+                  style={{ border: "1.5px dashed var(--line)" }}
+                >
+                  <Upload size={15} />
+                  {uploading ? "Uploading…" : "Upload from computer"}
+                </button>
+                <span className="text-xs text-[var(--muted)]">or paste a URL below</span>
+              </div>
+
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                style={{ display: "none" }}
+                onChange={handleImageUpload}
+              />
+
+              {/* URL fallback */}
               <input
                 className="field"
                 type="url"
-                placeholder="https://images.unsplash.com/..."
+                placeholder="https://images.unsplash.com/…"
                 value={form.image_url}
                 onChange={e => setForm(f => ({ ...f, image_url: e.target.value }))}
               />
               <p className="text-xs text-[var(--muted)] mt-1">
-                Paste an image URL from Unsplash, the original article, or any public image. Leave blank to use a default.
+                Accepts JPEG, PNG, GIF or WebP. Any size is fine. Leave blank to use a default image.
               </p>
+
+              {/* Preview + remove */}
               {form.image_url && (
-                <img src={form.image_url} alt="preview" className="mt-2 rounded-xl object-cover" style={{ height: 100, maxWidth: 200 }}
-                  onError={e => { e.target.style.display = "none"; }} />
+                <div className="mt-2 relative inline-block">
+                  <img
+                    src={form.image_url}
+                    alt="preview"
+                    className="rounded-xl object-cover"
+                    style={{ height: 100, maxWidth: 220 }}
+                    onError={e => { e.target.style.display = "none"; }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, image_url: "" }))}
+                    className="absolute -top-2 -right-2 bg-white border border-[var(--line)] rounded-full p-0.5 text-[var(--muted)] hover:text-red-500 shadow-sm"
+                    title="Remove image"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
               )}
             </div>
 
             {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2">{error}</p>}
 
             <div className="flex gap-3 pt-1">
-              <button type="submit" disabled={saving} className="btn btn-accent">
+              <button type="submit" disabled={saving || uploading} className="btn btn-accent">
                 {saving ? "Saving…" : <><Check size={15} /> {editing ? "Save changes" : "Publish article"}</>}
               </button>
               <button type="button" onClick={cancelForm} className="btn btn-ghost">Cancel</button>
@@ -264,17 +328,19 @@ export default function AdminNews() {
                 </div>
                 <p className="font-semibold text-[var(--green)] text-sm leading-snug line-clamp-1">{article.title}</p>
                 <p className="text-xs text-[var(--muted)] line-clamp-2">{article.excerpt}</p>
-                                {article.published_at && (
-                <p className="text-xs text-[var(--muted)]">Published {formatDate(article.published_at)}</p>
-              )}
+                {article.published_at && (
+                  <p className="text-xs text-[var(--muted)]">Published {formatDate(article.published_at)}</p>
+                )}
               </div>
 
               {/* Actions */}
               <div className="flex items-center gap-1 flex-shrink-0">
-                <a href={article.url} target="_blank" rel="noopener noreferrer"
-                  className="btn btn-ghost btn-sm p-2" title="Open article">
-                  <ExternalLink size={15} />
-                </a>
+                {article.url && (
+                  <a href={article.url} target="_blank" rel="noopener noreferrer"
+                    className="btn btn-ghost btn-sm p-2" title="Open article">
+                    <ExternalLink size={15} />
+                  </a>
+                )}
                 <button onClick={() => togglePublished(article)} className="btn btn-ghost btn-sm p-2"
                   title={article.published ? "Unpublish" : "Publish"}>
                   {article.published ? <EyeOff size={15} /> : <Eye size={15} />}
