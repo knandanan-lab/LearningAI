@@ -1,9 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Pencil, Trash2, Eye, EyeOff, ArrowLeft, X, Check, ExternalLink } from "lucide-react";
+import { Plus, Pencil, Trash2, Eye, EyeOff, ArrowLeft, X, Check, ExternalLink, Upload } from "lucide-react";
 import { api, errorText } from "../lib/api";
 
 const CATEGORIES = ["Productivity", "Policy", "Tools", "Research", "Africa", "Education", "Other"];
+
+function formatDate(iso) {
+  if (!iso) return null;
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
 
 const EMPTY_FORM = { title: "", category: "Tools", excerpt: "", url: "", image_url: "", published: true };
 
@@ -16,6 +21,8 @@ export default function AdminNews() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
 
   function load() {
     setLoading(true);
@@ -55,8 +62,8 @@ export default function AdminNews() {
 
   async function handleSave(e) {
     e.preventDefault();
-    if (!form.title.trim() || !form.url.trim() || !form.excerpt.trim()) {
-      setError("Title, URL and excerpt are required.");
+    if (!form.title.trim() || !form.excerpt.trim()) {
+      setError("Title and summary are required.");
       return;
     }
     setSaving(true);
@@ -181,7 +188,7 @@ export default function AdminNews() {
 
             {/* URL */}
             <div>
-              <label className="label">Link to full article *</label>
+              <label className="label">Link to full article <span className="font-normal text-[var(--muted)]">(optional)</span></label>
               <input
                 className="field"
                 type="url"
@@ -257,6 +264,9 @@ export default function AdminNews() {
                 </div>
                 <p className="font-semibold text-[var(--green)] text-sm leading-snug line-clamp-1">{article.title}</p>
                 <p className="text-xs text-[var(--muted)] line-clamp-2">{article.excerpt}</p>
+                                {article.published_at && (
+                <p className="text-xs text-[var(--muted)]">Published {formatDate(article.published_at)}</p>
+              )}
               </div>
 
               {/* Actions */}
