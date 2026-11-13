@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
-import { ArrowUpRight, Newspaper, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowUpRight, Newspaper, ChevronLeft, ChevronRight, Play } from "lucide-react";
+import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 
 const PLACEHOLDER_IMG = "https://images.unsplash.com/photo-1677442135703-1787eea5ce01?auto=format&fit=crop&w=600&q=60";
 const BACKEND = process.env.REACT_APP_BACKEND_URL || "";
 const PAGE_SIZE = 3;
 
-function resolveImage(url) {
+function resolveMedia(url) {
   if (!url) return "";
   if (url.startsWith("/uploads/")) return `${BACKEND}${url}`;
   return url;
@@ -27,6 +28,13 @@ function categoryStyle(cat) {
 function formatDate(iso) {
   if (!iso) return null;
   return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+// Returns the href and whether it's external
+function articleLink(article) {
+  if (article.url) return { href: article.url, external: true };
+  if (article.body) return { href: `/news/${article.id}`, external: false };
+  return null;
 }
 
 export default function NewsInsights() {
@@ -57,7 +65,6 @@ export default function NewsInsights() {
             <div className="p-5 space-y-2">
               <div style={{ height: 14, width: "40%", background: "var(--line)", borderRadius: 6 }} />
               <div style={{ height: 18, width: "85%", background: "var(--line)", borderRadius: 6 }} />
-              <div style={{ height: 13, width: "100%", background: "var(--line)", borderRadius: 6 }} />
             </div>
           </div>
         ))}
@@ -83,27 +90,17 @@ export default function NewsInsights() {
             <h2 className="text-2xl font-bold text-[var(--green)] leading-tight">AI News &amp; Insights</h2>
           </div>
         </div>
-
-        {/* Arrows — only show if more than one page */}
         {totalPages > 1 && (
           <div className="flex items-center gap-2">
             <span className="text-xs text-[var(--muted)]">{page + 1} / {totalPages}</span>
-            <button
-              onClick={() => setPage(p => p - 1)}
-              disabled={!canPrev}
+            <button onClick={() => setPage(p => p - 1)} disabled={!canPrev}
               className="btn btn-ghost btn-sm p-2 rounded-full"
-              style={{ opacity: canPrev ? 1 : 0.35 }}
-              aria-label="Previous articles"
-            >
+              style={{ opacity: canPrev ? 1 : 0.35 }} aria-label="Previous articles">
               <ChevronLeft size={20} />
             </button>
-            <button
-              onClick={() => setPage(p => p + 1)}
-              disabled={!canNext}
+            <button onClick={() => setPage(p => p + 1)} disabled={!canNext}
               className="btn btn-ghost btn-sm p-2 rounded-full"
-              style={{ opacity: canNext ? 1 : 0.35 }}
-              aria-label="Next articles"
-            >
+              style={{ opacity: canNext ? 1 : 0.35 }} aria-label="Next articles">
               <ChevronRight size={20} />
             </button>
           </div>
@@ -121,20 +118,14 @@ export default function NewsInsights() {
       {totalPages > 1 && (
         <div className="flex justify-center gap-2 pt-1">
           {Array.from({ length: totalPages }).map((_, i) => (
-            <button
-              key={i}
-              onClick={() => setPage(i)}
+            <button key={i} onClick={() => setPage(i)}
               className="rounded-full transition-all"
               style={{
-                width: i === page ? 20 : 8,
-                height: 8,
+                width: i === page ? 20 : 8, height: 8,
                 background: i === page ? "var(--sky)" : "var(--line)",
-                border: "none",
-                cursor: "pointer",
-                padding: 0,
+                border: "none", cursor: "pointer", padding: 0,
               }}
-              aria-label={`Go to page ${i + 1}`}
-            />
+              aria-label={`Go to page ${i + 1}`} />
           ))}
         </div>
       )}
@@ -143,22 +134,32 @@ export default function NewsInsights() {
 }
 
 function ArticleCard({ article }) {
-  return (
-    <a
-      href={article.url || undefined}
-      target={article.url ? "_blank" : undefined}
-      rel="noopener noreferrer"
-      className={`card flex flex-col overflow-hidden group${article.url ? " card-link" : ""}`}
-      style={{ textDecoration: "none", color: "inherit" }}
-    >
+  const link = articleLink(article);
+  const imgSrc = resolveMedia(article.image_url) || PLACEHOLDER_IMG;
+  const videoSrc = resolveMedia(article.video_url);
+
+  const inner = (
+    <>
+      {/* Media */}
       <div className="relative overflow-hidden" style={{ height: 180 }}>
-        <img
-          src={resolveImage(article.image_url) || PLACEHOLDER_IMG}
-          alt=""
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-          onError={e => { e.target.src = PLACEHOLDER_IMG; }}
-        />
+        {videoSrc ? (
+          <>
+            <video src={videoSrc} className="w-full h-full object-cover" muted playsInline />
+            <div className="absolute inset-0 flex items-center justify-center"
+              style={{ background: "rgba(0,0,0,0.3)" }}>
+              <span className="bg-white rounded-full p-3 shadow-lg">
+                <Play size={18} className="text-[var(--green)]" fill="currentColor" />
+              </span>
+            </div>
+          </>
+        ) : (
+          <img src={imgSrc} alt=""
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            onError={e => { e.target.src = PLACEHOLDER_IMG; }} />
+        )}
       </div>
+
+      {/* Content */}
       <div className="p-5 flex flex-col gap-2 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
           {article.published_at && (
@@ -169,13 +170,28 @@ function ArticleCard({ article }) {
         <h3 className="font-bold text-[var(--green)] leading-snug text-base group-hover:text-[var(--sky)] transition-colors line-clamp-3 flex-1">
           {article.title}
         </h3>
-        {article.url && (
+        {link && (
           <span className="inline-flex items-center gap-1 text-sm font-medium text-[var(--sky)] mt-1 self-start">
-            Read more <ArrowUpRight size={14} />
+            Read more {link.external ? <ArrowUpRight size={14} /> : <ArrowUpRight size={14} />}
           </span>
         )}
       </div>
+    </>
+  );
+
+  const cardClass = `card flex flex-col overflow-hidden group${link ? " card-link" : ""}`;
+
+  if (!link) return <div className={cardClass}>{inner}</div>;
+  if (link.external) return (
+    <a href={link.href} target="_blank" rel="noopener noreferrer"
+      className={cardClass} style={{ textDecoration: "none", color: "inherit" }}>
+      {inner}
     </a>
+  );
+  return (
+    <Link to={link.href} className={cardClass} style={{ textDecoration: "none", color: "inherit" }}>
+      {inner}
+    </Link>
   );
 }
 
