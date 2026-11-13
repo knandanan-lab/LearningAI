@@ -493,6 +493,25 @@ async def admin_feedback(_: dict = Depends(admin_user)):
                 for d in docs if d.get("comment")]
     return {"responses": len(docs), "counts": counts, "comments": comments[:100]}
 
+# ---------- AI practice (Anthropic API) ----------
+@api.post("/admin/upload-video")
+async def upload_video(file: UploadFile = File(...), _: dict = Depends(admin_user)):
+    ALLOWED_VIDEO_TYPES = {"video/mp4", "video/webm", "video/ogg"}
+    if file.content_type not in ALLOWED_VIDEO_TYPES:
+        raise HTTPException(400, "Only MP4, WebM and OGG videos are accepted")
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "mp4"
+    filename = f"{uuid.uuid4()}.{ext}"
+    dest = UPLOADS_DIR / filename
+    contents = await file.read()
+    dest.write_bytes(contents)
+    return {"url": f"/uploads/{filename}"}
+
+@api.get("/news/{article_id}")
+async def get_news_article(article_id: str):
+    doc = await db.news.find_one({"id": article_id, "published": True}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Article not found")
+    return doc
 
 # ---------- News & Insights ----------
 class NewsArticleIn(BaseModel):
@@ -501,6 +520,8 @@ class NewsArticleIn(BaseModel):
     excerpt: str = Field(min_length=10, max_length=400)
     url: str = Field(default="", max_length=500)
     image_url: str = Field(default="", max_length=500)
+    video_url: str = Field(default="", max_length=500)
+    body: str = Field(default="", max_length=20000)
     published: bool = Field(default=True)
 
 
