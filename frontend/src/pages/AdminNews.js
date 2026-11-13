@@ -1,16 +1,26 @@
 import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Pencil, Trash2, Eye, EyeOff, ArrowLeft, X, Check, ExternalLink, Upload } from "lucide-react";
+import { Plus, Pencil, Trash2, Eye, EyeOff, ArrowLeft, X, Check, ExternalLink, Upload, Video, Image } from "lucide-react";
 import { api, errorText } from "../lib/api";
 
 const CATEGORIES = ["Productivity", "Policy", "Tools", "Research", "Africa", "Education", "Other"];
+const BACKEND = process.env.REACT_APP_BACKEND_URL || "";
+
+function resolveImage(url) {
+  if (!url) return "";
+  if (url.startsWith("/uploads/")) return `${BACKEND}${url}`;
+  return url;
+}
 
 function formatDate(iso) {
   if (!iso) return null;
   return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
-const EMPTY_FORM = { title: "", category: "Tools", excerpt: "", url: "", image_url: "", published: true };
+const EMPTY_FORM = {
+  title: "", category: "Tools", excerpt: "", url: "",
+  image_url: "", video_url: "", body: "", published: true,
+};
 
 export default function AdminNews() {
   const [articles, setArticles] = useState([]);
@@ -22,7 +32,9 @@ export default function AdminNews() {
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef(null);
+  const [mediaType, setMediaType] = useState("image"); // "image" | "video"
+  const imageInputRef = useRef(null);
+  const videoInputRef = useRef(null);
 
   function load() {
     setLoading(true);
@@ -36,6 +48,7 @@ export default function AdminNews() {
   function openNew() {
     setEditing(null);
     setForm(EMPTY_FORM);
+    setMediaType("image");
     setError("");
     setShowForm(true);
   }
@@ -48,8 +61,11 @@ export default function AdminNews() {
       excerpt: article.excerpt,
       url: article.url || "",
       image_url: article.image_url || "",
+      video_url: article.video_url || "",
+      body: article.body || "",
       published: article.published,
     });
+    setMediaType(article.video_url ? "video" : "image");
     setError("");
     setShowForm(true);
   }
@@ -71,13 +87,32 @@ export default function AdminNews() {
       const res = await api.post("/admin/upload-image", data, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      setForm(f => ({ ...f, image_url: res.data.url }));
+      setForm(f => ({ ...f, image_url: res.data.url, video_url: "" }));
     } catch (err) {
       setError("Image upload failed: " + errorText(err));
     } finally {
       setUploading(false);
-      // reset so the same file can be re-selected
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (imageInputRef.current) imageInputRef.current.value = "";
+    }
+  }
+
+  async function handleVideoUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    setError("");
+    try {
+      const data = new FormData();
+      data.append("file", file);
+      const res = await api.post("/admin/upload-video", data, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setForm(f => ({ ...f, video_url: res.data.url, image_url: "" }));
+    } catch (err) {
+      setError("Video upload failed: " + errorText(err));
+    } finally {
+      setUploading(false);
+      if (videoInputRef.current) videoInputRef.current.value = "";
     }
   }
 
@@ -164,29 +199,20 @@ export default function AdminNews() {
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
                 <label className="label">Category *</label>
-                <select
-                  className="field"
-                  value={form.category}
-                  onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                >
+                <select className="field" value={form.category}
+                  onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
                   {CATEGORIES.map(c => <option key={c}>{c}</option>)}
                 </select>
               </div>
               <div>
                 <label className="label">Status</label>
                 <div className="flex gap-3 mt-1">
-                  <button
-                    type="button"
-                    onClick={() => setForm(f => ({ ...f, published: true }))}
-                    className={`btn btn-sm ${form.published ? "btn-primary" : "btn-ghost"}`}
-                  >
+                  <button type="button" onClick={() => setForm(f => ({ ...f, published: true }))}
+                    className={`btn btn-sm ${form.published ? "btn-primary" : "btn-ghost"}`}>
                     <Eye size={14} /> Published
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setForm(f => ({ ...f, published: false }))}
-                    className={`btn btn-sm ${!form.published ? "btn-primary" : "btn-ghost"}`}
-                  >
+                  <button type="button" onClick={() => setForm(f => ({ ...f, published: false }))}
+                    className={`btn btn-sm ${!form.published ? "btn-primary" : "btn-ghost"}`}>
                     <EyeOff size={14} /> Draft
                   </button>
                 </div>
@@ -196,88 +222,118 @@ export default function AdminNews() {
             {/* Excerpt */}
             <div>
               <label className="label">Short summary (1–2 sentences) *</label>
-              <textarea
-                className="field"
-                rows={3}
+              <textarea className="field" rows={3}
                 placeholder="Briefly describe what the article is about. This is what visitors read on the home page."
                 value={form.excerpt}
                 onChange={e => setForm(f => ({ ...f, excerpt: e.target.value }))}
-                maxLength={400}
-              />
+                maxLength={400} />
               <p className="text-xs text-[var(--muted)] mt-1">{form.excerpt.length}/400 characters</p>
             </div>
 
-            {/* URL */}
+            {/* Full article body */}
             <div>
-              <label className="label">Link to full article <span className="font-normal text-[var(--muted)]">(optional)</span></label>
-              <input
-                className="field"
-                type="url"
-                placeholder="https://www.bbc.com/..."
-                value={form.url}
-                onChange={e => setForm(f => ({ ...f, url: e.target.value }))}
-              />
+              <label className="label">
+                Full article text <span className="font-normal text-[var(--muted)]">(optional — shown on the article page when no external URL is set)</span>
+              </label>
+              <textarea className="field" rows={8}
+                placeholder="Write the full article here. If you set an external URL above, visitors will be sent there instead."
+                value={form.body}
+                onChange={e => setForm(f => ({ ...f, body: e.target.value }))} />
             </div>
 
-            {/* Cover image — upload OR paste URL */}
+            {/* External URL */}
             <div>
-              <label className="label">Cover image <span className="font-normal text-[var(--muted)]">(optional)</span></label>
+              <label className="label">Link to external article <span className="font-normal text-[var(--muted)]">(optional — overrides the article text above)</span></label>
+              <input className="field" type="url"
+                placeholder="https://www.bbc.com/..."
+                value={form.url}
+                onChange={e => setForm(f => ({ ...f, url: e.target.value }))} />
+              <p className="text-xs text-[var(--muted)] mt-1">
+                If set, "Read more" links here. If left blank and you wrote article text above, visitors read it on this site.
+              </p>
+            </div>
 
-              {/* Upload button */}
-              <div className="flex items-center gap-3 mb-2">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                  className="btn btn-ghost btn-sm"
-                  style={{ border: "1.5px dashed var(--line)" }}
-                >
-                  <Upload size={15} />
-                  {uploading ? "Uploading…" : "Upload from computer"}
+            {/* Cover media — image OR video */}
+            <div>
+              <label className="label">Cover media <span className="font-normal text-[var(--muted)]">(optional)</span></label>
+
+              {/* Toggle image / video */}
+              <div className="flex gap-2 mb-3">
+                <button type="button"
+                  onClick={() => { setMediaType("image"); setForm(f => ({ ...f, video_url: "" })); }}
+                  className={`btn btn-sm ${mediaType === "image" ? "btn-primary" : "btn-ghost"}`}>
+                  <Image size={14} /> Image
                 </button>
-                <span className="text-xs text-[var(--muted)]">or paste a URL below</span>
+                <button type="button"
+                  onClick={() => { setMediaType("video"); setForm(f => ({ ...f, image_url: "" })); }}
+                  className={`btn btn-sm ${mediaType === "video" ? "btn-primary" : "btn-ghost"}`}>
+                  <Video size={14} /> Video
+                </button>
               </div>
 
-              {/* Hidden file input */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/gif,image/webp"
-                style={{ display: "none" }}
-                onChange={handleImageUpload}
-              />
-
-              {/* URL fallback */}
-              <input
-                className="field"
-                type="text"
-                placeholder="https://images.unsplash.com/… or upload above"
-                value={form.image_url}
-
-                onChange={e => setForm(f => ({ ...f, image_url: e.target.value }))}
-              />
-              <p className="text-xs text-[var(--muted)] mt-1">
-                Accepts JPEG, PNG, GIF or WebP. Any size is fine. Leave blank to use a default image.
-              </p>
-
-              {/* Preview + remove */}
-              {form.image_url && (
-                <div className="mt-2 relative inline-block">
-                  <img
-                    src={form.image_url}
-                    alt="preview"
-                    className="rounded-xl object-cover"
-                    style={{ height: 100, maxWidth: 220 }}
-                    onError={e => { e.target.style.display = "none"; }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setForm(f => ({ ...f, image_url: "" }))}
-                    className="absolute -top-2 -right-2 bg-white border border-[var(--line)] rounded-full p-0.5 text-[var(--muted)] hover:text-red-500 shadow-sm"
-                    title="Remove image"
-                  >
-                    <X size={14} />
-                  </button>
+              {mediaType === "image" ? (
+                <div>
+                  <div className="flex items-center gap-3 mb-2">
+                    <button type="button" onClick={() => imageInputRef.current?.click()}
+                      disabled={uploading}
+                      className="btn btn-ghost btn-sm"
+                      style={{ border: "1.5px dashed var(--line)" }}>
+                      <Upload size={15} /> {uploading ? "Uploading…" : "Upload from computer"}
+                    </button>
+                    <span className="text-xs text-[var(--muted)]">or paste a URL below</span>
+                  </div>
+                  <input ref={imageInputRef} type="file"
+                    accept="image/jpeg,image/png,image/gif,image/webp"
+                    style={{ display: "none" }} onChange={handleImageUpload} />
+                  <input className="field" type="text"
+                    placeholder="https://images.unsplash.com/…"
+                    value={form.image_url}
+                    onChange={e => setForm(f => ({ ...f, image_url: e.target.value }))} />
+                  <p className="text-xs text-[var(--muted)] mt-1">Accepts JPEG, PNG, GIF or WebP.</p>
+                  {form.image_url && (
+                    <div className="mt-2 relative inline-block">
+                      <img src={resolveImage(form.image_url)} alt="preview"
+                        className="rounded-xl object-cover"
+                        style={{ height: 100, maxWidth: 220 }}
+                        onError={e => { e.target.style.display = "none"; }} />
+                      <button type="button"
+                        onClick={() => setForm(f => ({ ...f, image_url: "" }))}
+                        className="absolute -top-2 -right-2 bg-white border border-[var(--line)] rounded-full p-0.5 text-[var(--muted)] hover:text-red-500 shadow-sm">
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <div className="flex items-center gap-3 mb-2">
+                    <button type="button" onClick={() => videoInputRef.current?.click()}
+                      disabled={uploading}
+                      className="btn btn-ghost btn-sm"
+                      style={{ border: "1.5px dashed var(--line)" }}>
+                      <Upload size={15} /> {uploading ? "Uploading…" : "Upload video"}
+                    </button>
+                    <span className="text-xs text-[var(--muted)]">or paste a URL below</span>
+                  </div>
+                  <input ref={videoInputRef} type="file"
+                    accept="video/mp4,video/webm,video/ogg"
+                    style={{ display: "none" }} onChange={handleVideoUpload} />
+                  <input className="field" type="text"
+                    placeholder="https://… or /uploads/video.mp4"
+                    value={form.video_url}
+                    onChange={e => setForm(f => ({ ...f, video_url: e.target.value }))} />
+                  <p className="text-xs text-[var(--muted)] mt-1">Accepts MP4, WebM or OGG. For large videos, paste a YouTube/Vimeo embed URL instead.</p>
+                  {form.video_url && (
+                    <div className="mt-2 relative inline-block">
+                      <video src={form.video_url.startsWith("/uploads/") ? `${BACKEND}${form.video_url}` : form.video_url}
+                        className="rounded-xl" style={{ height: 120, maxWidth: 220 }} controls />
+                      <button type="button"
+                        onClick={() => setForm(f => ({ ...f, video_url: "" }))}
+                        className="absolute -top-2 -right-2 bg-white border border-[var(--line)] rounded-full p-0.5 text-[var(--muted)] hover:text-red-500 shadow-sm">
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -307,8 +363,14 @@ export default function AdminNews() {
           {articles.map(article => (
             <div key={article.id} className="card p-4 sm:p-5 flex gap-4 items-start">
               {/* Thumbnail */}
-              {article.image_url ? (
-                <img src={article.image_url} alt="" className="rounded-xl object-cover flex-shrink-0 hidden sm:block"
+              {article.video_url ? (
+                <div className="rounded-xl bg-[var(--wash)] flex-shrink-0 hidden sm:flex items-center justify-center"
+                  style={{ width: 80, height: 60 }}>
+                  <Video size={20} className="text-[var(--muted)]" />
+                </div>
+              ) : article.image_url ? (
+                <img src={resolveImage(article.image_url)} alt=""
+                  className="rounded-xl object-cover flex-shrink-0 hidden sm:block"
                   style={{ width: 80, height: 60 }}
                   onError={e => { e.target.style.display = "none"; }} />
               ) : (
@@ -326,6 +388,9 @@ export default function AdminNews() {
                   ) : (
                     <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">Draft</span>
                   )}
+                  {article.body && !article.url && (
+                    <span className="text-xs font-medium text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full">Has article text</span>
+                  )}
                 </div>
                 <p className="font-semibold text-[var(--green)] text-sm leading-snug line-clamp-1">{article.title}</p>
                 <p className="text-xs text-[var(--muted)] line-clamp-2">{article.excerpt}</p>
@@ -338,7 +403,7 @@ export default function AdminNews() {
               <div className="flex items-center gap-1 flex-shrink-0">
                 {article.url && (
                   <a href={article.url} target="_blank" rel="noopener noreferrer"
-                    className="btn btn-ghost btn-sm p-2" title="Open article">
+                    className="btn btn-ghost btn-sm p-2" title="Open external article">
                     <ExternalLink size={15} />
                   </a>
                 )}
